@@ -1,0 +1,13 @@
+# Lokale Zugangsdaten niemals auf GitHub hochladen
+secrets.h
+
+# Arduino/Build-Artefakte
+build/
+*.bin
+*.elf
+*.map
+*.hex
+
+# Archive und macOS-Dateien
+*.zip
+.DS_Store

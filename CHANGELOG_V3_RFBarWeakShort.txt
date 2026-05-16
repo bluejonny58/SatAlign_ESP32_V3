@@ -1,0 +1,13 @@
+SatAlign ESP32 V3 - RFBarWeakShort
+
+Aenderung:
+- RF-Balken bei eindeutig schwachem Signal deutlich verkuerzt.
+- Schwach bleibt rot, brauchbar bleibt gelb/orange, gut/sehr gut bleibt gruen.
+- Die RF-Grenzwerte und die Signalbewertung wurden nicht veraendert.
+- Motorlogik, Suche, Signaloptimierung, OTA, WLAN und Pinbelegung wurden nicht veraendert.
+
+Grund:
+- Ohne Antenne bzw. ohne Signal wirkte der rote Balken optisch zu lang.
+- Der kurze rote Balken zeigt jetzt klarer: Signal ist schwach bzw. nicht verwertbar.
+
+Kommentarstand: V3

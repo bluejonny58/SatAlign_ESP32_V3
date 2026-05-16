@@ -1,0 +1,22 @@
+SatAlign ESP32 V3 - Cleanup
+
+Basis:
+- SatAlign_ESP32_V3_CommentsUpdate
+
+Durchgefuehrtes sicheres Cleanup:
+- alte *_Bemerkungen.txt-Dateien aus dem Arduino-Projektordner entfernt
+- effectData.h entfernt, da sie im SatAlign-Projekt nicht eingebunden wird
+- Arduino-Projektordner und .ino passend auf SatAlign_ESP32_V3_Cleanup benannt
+
+Bewusst NICHT veraendert:
+- Motorlogik
+- Suchlogik
+- Signaloptimierung
+- RF-Auswertung
+- OTA/WLAN
+- Pinbelegung
+- Web-UI-Logik
+- TFT-Logik
+
+Hinweis:
+Tiefe Code-Cleanups, z. B. alte Boot-EZ-Automatik, Feinsuche-Reste oder alte AUTO-Zustaende, sollten erst nach erfolgreichem Aussentest entfernt werden.
