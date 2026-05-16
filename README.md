@@ -25,37 +25,6 @@ The project was inspired in part by existing antenna-rotor and stepper-motor con
 - OTA update support over Wi-Fi
 - GitHub-safe configuration using a local `secrets.h` file
 
-## Hardware overview
-
-Typical hardware used in this project:
-
-- ESP32 development board
-- Selfsat flat satellite antenna
-- Azimuth drive for horizontal movement
-- Elevation linear actuator for angle adjustment
-- A3144 Hall sensors for Center, East limit, and West limit
-- MPU6050 / GY-521 sensor for elevation angle measurement
-- AD8317 1M–10GHz 60dB RF detector
-- SAT splitter
-- DC blocker, F-plug to F-socket
-- F-plug to SMA adapter / 50 Ohm RG316 extension cable
-- ST7735 1.44 inch TFT display
-- Push buttons for local operation
-- Satellite receiver
-
-> **Important:** The DC blocker must be installed before the AD8317 RF detector. It protects the RF detector from the 13 V / 18 V LNB supply voltage. Without the DC blocker, the AD8317 can be damaged.
-
-## RF signal logic
-
-The RF detector output is evaluated inversely:
-
-- lower ADC / voltage value = stronger RF signal
-- higher ADC / voltage value = weaker or no usable RF signal
-
-The project uses practical threshold values from outdoor testing to classify the signal roughly as weak, usable, good, or very good.
-
-These values are not universal. They depend on the specific receiver, LNB, splitter, cable path, attenuation, and detector setup.
-
 ## Basic operation
 
 1. Switch on the satellite receiver.
@@ -84,49 +53,6 @@ The web interface provides access to:
 
 The web UI is designed for mobile use and mirrors the practical operation of the TFT display where appropriate.
 
-## Local operation
-
-The local TFT and buttons can be used without the web interface.
-
-Typical button logic:
-
-- **PLUS**: move/select/increase, depending on menu
-- **MINUS**: move/select/decrease, depending on menu
-- **MODE short**: confirm / start selected function
-- **MODE long**: cancel / return, depending on state
-
-## Configuration and secrets
-
-Private data is not stored directly in the GitHub version.
-
-Before compiling, copy:
-
-```text
-secrets.example.h
-```
-
-to:
-
-```text
-secrets.h
-```
-
-Then enter your local Wi-Fi and OTA data in `secrets.h`.
-
-Example:
-
-```cpp
-#pragma once
-
-static const char* WIFI_SSID = "YOUR_WIFI_NAME";
-static const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
-static const char* WIFI_HOSTNAME = "sat-tracker";
-
-static const char* OTA_PASSWORD = "YOUR_OTA_PASSWORD";
-```
-
-`secrets.h` is intentionally ignored by Git and should not be uploaded to GitHub.
-
 ## Documentation
 
 Additional documentation can be stored in the `docs/` folder, for example:
@@ -135,8 +61,6 @@ Additional documentation can be stored in the `docs/` folder, for example:
 - quick-start guide
 - wiring notes
 - troubleshooting guide
-
-Test and utility sketches should be placed in `tools/`, not in `docs/`.
 
 ## Install test sketch
 
@@ -151,12 +75,6 @@ A separate install test sketch can be used before commissioning the full project
 - center alignment
 - elevation motor
 - web / network availability
-
-Recommended path:
-
-```text
-tools/SatAlign_ESP32_V3_InstallTest/
-```
 
 ## Status
 
@@ -173,7 +91,6 @@ The current V3 project state has passed offline testing for:
 - reset and start window
 - OTA / network diagnosis
 
-Outdoor live testing with real satellite signal is still the key step for validating the final RF thresholds and signal optimization behavior.
 
 ## License and reuse
 
@@ -183,6 +100,6 @@ Use at your own risk. Always check your wiring, motor direction, RF path, DC blo
 
 ## Credits
 
-Project idea, practical testing, hardware decisions, and requirements: **Hans-Peter Voß**
+Project idea, practical testing, hardware decisions, and requirements: **Hans-Peter Voss**
 
 Programming support, comments, and documentation assistance: **ChatGPT GPT-5.5**
