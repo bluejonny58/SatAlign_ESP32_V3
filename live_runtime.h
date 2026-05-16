@@ -267,19 +267,9 @@ uint16_t liveGetRfRawAdc();
 float liveGetRfFilteredAdc();
 const char* liveGetRfQualityText();
 
-// V3: Status fuer die versteckte Web-UI-Seite "Signal optimieren".
-// Die Seite wird automatisch angezeigt, wenn die Optimierung nach PLUS
-// wirklich laeuft. Die Werte dienen nur Anzeige/Diagnose; die eigentliche
-// Optimierungslogik bleibt vollstaendig in live_runtime.cpp.
-bool liveSignalOptimizationActive();
-const char* liveGetSignalOptimizationPhaseText();
-const char* liveGetSignalOptimizationInfoText();
-float liveGetSignalOptimizationStartAdc();
-float liveGetSignalOptimizationBestAdc();
-float liveGetSignalOptimizationCurrentAdc();
-int liveGetSignalOptimizationStepsInPhase();
+// V3: Statusfunktionen fuer die entfernte Signaloptimierungsseite wurden
+// geloescht. Die Hall- und Diagnosefunktionen darunter bleiben aktiv.
 
-// Hallstatus: Referenzlogik entspricht der getesteten Mittenfunktion.
 bool liveHallCenter();
 bool liveHallEast();
 bool liveHallWest();

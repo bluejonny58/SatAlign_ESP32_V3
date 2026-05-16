@@ -7,10 +7,6 @@
 
 #pragma once
 
-// V3: Zeitfenster fuer den manuellen Winkel-Startbildschirm beim Einschalten.
-// Definition und Defaultwert liegen in settings.cpp.
-extern unsigned long BOOT_MANUAL_ELEVATION_WINDOW_MS;
-
 
 // Initialisiert das zentrale Settings-System.
 //
@@ -50,13 +46,13 @@ void printSettingsToSerial();
 // V3: RF-Bewertung aus Aussentest.
 // Diese Werte dienen als Ampel fuer schwach/brauchbar/gut/sehr gut.
 // Sie blockieren PLUS nicht; der Nutzer darf bei sichtbarem TV-Bild
-// weiterhin die Signaloptimierung starten.
+// weiterhin den Kandidaten bestaetigen.
 extern float RF_TV_USABLE_MAX_ADC;
 extern float RF_TV_GOOD_MAX_ADC;
 extern float RF_TV_STRONG_MAX_ADC;
 
 
-// V3: Signaloptimierung nach PLUS-Bestaetigung eines Satelliten.
+// V3: Reservierte Altwerte der entfernten Signaloptimierung.
 // Definition und Defaultwerte liegen in settings.cpp.
 extern unsigned long SIGNAL_OPT_AZ_STEP_MS;
 extern unsigned long SIGNAL_OPT_AZ_SETTLE_MS;

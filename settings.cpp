@@ -5,7 +5,7 @@
   - Standard-Winkel beim Start
   - Startfenster fuer manuelle Winkeleinstellung
   - RF-Grenzwerte aus den Aussentests
-  - Schrittzeiten und Schwellen fuer Signal optimieren
+  - reservierte Altwerte der entfernten Signaloptimierung
 
   Die Werte werden bewusst im Sketch gehalten und nicht dauerhaft in NVS
   gespeichert. Wenn im Test bessere Werte gefunden werden, werden sie hier
@@ -149,7 +149,7 @@ float ELEVATION_MAX_SOFT = 34.0f;
 // Standard-EZ-Winkel nach dem Einschalten.
 //
 // Verwendung in dieser Version:
-// - Boot: wird in der manuellen EZ-Startphase als empfohlener Startwert angezeigt
+// - Suchen/Web-UI: wird als empfohlener Standardwinkel angezeigt
 // - Web-UI: wird im Such-Setup als Standard-EZ/Ziel angezeigt
 // - Diagnose: wird im Serial-Settings-Dump ausgegeben
 //
@@ -166,55 +166,8 @@ float DEFAULT_TARGET_ELEVATION = 30.0f;
 // Toleranz für normale Zielanfahrten.
 float ELEVATION_TOLERANCE_DEG = 1.0f;
 
-// Boot-Toleranz fuer die automatische Standard-EZ-Anfahrt.
-// Kommentarstand: V3
-//
-// Live-Test-Anpassung V3:
-// Die Elevation muss beim Einschalten nicht hochpraezise getroffen werden.
-// Sie soll die Antenne nur reproduzierbar in einen sinnvollen Suchbereich
-// bringen; die eigentliche Feinausrichtung erfolgt danach ueber RF/Suche.
-//
-// Der separate MPU-Stillstandstest zeigte bereits ohne Bewegung einen
-// Schwankungsbereich von ca. 0.7 Grad. Eine alte Toleranz von 0.30 Grad war
-// deshalb zu streng und konnte unnoetige Nachregelungen oder Hinweise ausloesen.
-// 1.0 Grad ist fuer den Start praxisnaeher und passt zur groben EZ-Vorposition.
-float BOOT_ELEVATION_TOLERANCE_DEG = 1.0f;
-
-// Historischer Timeout-Wert fuer die alte automatische Boot-EZ-Anfahrt.
-// Kommentarstand: V3
-//
-// V3aq:
-// Der automatische EZ-Start mit Countdown/Timeout wird im aktuellen Bootablauf
-// nicht mehr verwendet. Stattdessen stellt der Nutzer die Elevation direkt
-// nach dem MPU-Test manuell ein und bestaetigt mit MODE. Der Wert bleibt als
-// dokumentierter Diagnose-/Rueckfallwert im Code, damit fruehere Tests und
-// Bemerkungen nachvollziehbar bleiben.
-unsigned long BOOT_ELEVATION_TIMEOUT_MS = 30000;
-
-// Historischer Anzeigen-Timeout fuer den frueheren EZ-Start-Countdown.
-// Kommentarstand: V3
-//
-// V3aq:
-// Im aktuellen Startablauf gibt es keinen Countdown mehr. Die manuelle
-// Startphase hat bewusst kein Zeitlimit, damit der Nutzer die Elevation in
-// Ruhe grob einstellen kann.
-unsigned long BOOT_ELEVATION_DISPLAY_TIMEOUT_MS = 30000;
-
-// Zeitfenster fuer den manuellen Elevations-Startschritt vor dem Hauptmenue.
-// Kommentarstand: V3
-//
-// Diese Zeit wird beim Einschalten fuer den hellblauen "Winkel Start"-Bildschirm
-// verwendet. Innerhalb dieses Fensters kann der Nutzer mit PLUS/MINUS den
-// Winkel grob korrigieren. Nach Ablauf wechselt die Anlage automatisch ins
-// Hauptmenue.
-//
-// V3-Entscheidung:
-// Der Wert liegt zentral in settings.cpp, weil er ein einstellbarer
-// Bedienparameter ist und nicht als lokale Konstante in der .ino-Datei
-// versteckt sein soll.
-//
-// Aktueller Testwert: 10 Sekunden.
-unsigned long BOOT_MANUAL_ELEVATION_WINDOW_MS = 10000;
+// V3: Der fruehere automatische/manuelle Boot-EZ-Start wurde entfernt.
+// Die Elevation wird nun direkt in den normalen Menues korrigiert.
 
 // PWM für schnelle Elevationsfahrt
 int EL_PWM_FAST = 140;
@@ -299,8 +252,8 @@ float RF_FILTER_ALPHA = 0.90f;
 // Diese ADC-Grenzen stammen aus den praktischen Aussentests mit eingeschaltetem
 // Sat-Receiver und beobachtetem TV-Bild. Sie dienen NICHT als Sperre fuer die
 // Benutzerentscheidung: Wenn der Nutzer im Kandidatenmodus PLUS drueckt, wird
-// die Signaloptimierung immer gestartet. Die Werte sind nur eine Ampel fuer die
-// Anzeige und Diagnose.
+// der Satellit bestaetigt. Die Werte sind nur eine Ampel fuer Anzeige und
+// Diagnose.
 //
 // Wichtig fuer den aktuellen AD8317/AD8318-Aufbau:
 // kleinerer ADC-/RF-Wert = staerkeres Signal.
@@ -309,24 +262,18 @@ float RF_TV_GOOD_MAX_ADC   = 800.0f;   // unterhalb: guter Kandidat
 float RF_TV_STRONG_MAX_ADC = 750.0f;   // unterhalb: sehr guter/Peak-naher Bereich
 
 // -----------------------------------------------------
-// Signaloptimierung nach bestaetigtem Satelliten
+// Reservierte Altwerte der entfernten Signaloptimierung
 // -----------------------------------------------------
 // Kommentarstand: V3
 //
-// Diese Werte gehoeren bewusst in settings.cpp, weil sie beim Aussentest
-// wahrscheinlich angepasst werden muessen. Die Funktion "Signal optimieren"
-// startet erst, wenn der Nutzer einen Kandidaten mit PLUS bestaetigt. Dann
-// sucht die Anlage zuerst in Azimut-Schritten und danach in Winkel-/
-// Elevationsschritten nach dem niedrigsten stabilen RF-ADC-Wert.
+// Diese Werte werden in der aktuellen Bedienlinie nicht aktiv verwendet.
+// Die automatische Optimierung nach PLUS wurde nach dem Live-Test entfernt,
+// weil der Nutzer bestaetigte TV-Punkt dadurch verlassen werden konnte.
+// PLUS bestaetigt jetzt nur den Kandidaten und behaelt die Position.
 //
-// V3 nach Live-Test:
-// Die Optimierung ist bewusst konservativ. Der vom Nutzer mit PLUS
-// bestaetigte Punkt wird als sicherer TV-Punkt behandelt. Die Anlage testet
-// nur kleine Schritte und uebernimmt einen neuen Bestpunkt erst bei klarer
-// Verbesserung. Am Ende wird zur besten gespeicherten Position zurueckgefahren.
-//
-// RF-Logik im aktuellen Aufbau:
-// kleinerer ADC-Wert = staerkeres Signal.
+// Die Werte bleiben vorerst als reservierte Altwerte erhalten, falls spaeter
+// eine neu geplante und getestete Optimierung wieder aufgebaut werden soll.
+// RF-Logik im aktuellen Aufbau: kleinerer ADC-Wert = staerkeres Signal.
 unsigned long SIGNAL_OPT_AZ_STEP_MS = 80;
 unsigned long SIGNAL_OPT_AZ_SETTLE_MS = 700;
 unsigned long SIGNAL_OPT_EL_STEP_MS = 60;
@@ -407,10 +354,6 @@ static void applyDefaultSettings() {
 
   DEFAULT_TARGET_ELEVATION = 30.0f;
   ELEVATION_TOLERANCE_DEG = 1.0f;
-  BOOT_ELEVATION_TOLERANCE_DEG = 1.0f;
-  BOOT_ELEVATION_TIMEOUT_MS = 30000;
-  BOOT_ELEVATION_DISPLAY_TIMEOUT_MS = 30000;
-  BOOT_MANUAL_ELEVATION_WINDOW_MS = 10000;
 
   EL_PWM_FAST = 140;
   EL_PWM_SLOW = 90;
@@ -436,12 +379,12 @@ static void applyDefaultSettings() {
   RF_FILTER_ALPHA = 0.90f;
 
   // V3: RF-Ampelwerte aus Aussentest. Diese Werte bewerten die
-  // Signalqualitaet, blockieren aber PLUS/Signaloptimierung bewusst nicht.
+  // Signalqualitaet, blockieren PLUS bewusst nicht; der Nutzer entscheidet am TV/Receiver.
   RF_TV_USABLE_MAX_ADC = 900.0f;
   RF_TV_GOOD_MAX_ADC   = 800.0f;
   RF_TV_STRONG_MAX_ADC = 750.0f;
 
-  // Signaloptimierung nach PLUS-Bestaetigung eines Kandidaten.
+  // Reservierte Altwerte der entfernten Signaloptimierung.
   // V3: Startwerte fuer den Aussentest; bewusst zentral anpassbar.
   SIGNAL_OPT_AZ_STEP_MS = 80;
   SIGNAL_OPT_AZ_SETTLE_MS = 700;
@@ -536,14 +479,6 @@ void printSettingsToSerial() {
   Serial.println(DEFAULT_TARGET_ELEVATION, 2);
   Serial.print("ELEVATION_TOLERANCE_DEG = ");
   Serial.println(ELEVATION_TOLERANCE_DEG, 2);
-  Serial.print("BOOT_ELEVATION_TOLERANCE_DEG = ");
-  Serial.println(BOOT_ELEVATION_TOLERANCE_DEG, 2);
-  Serial.print("BOOT_ELEVATION_TIMEOUT_MS = ");
-  Serial.println(BOOT_ELEVATION_TIMEOUT_MS);
-  Serial.print("BOOT_ELEVATION_DISPLAY_TIMEOUT_MS = ");
-  Serial.println(BOOT_ELEVATION_DISPLAY_TIMEOUT_MS);
-  Serial.print("BOOT_MANUAL_ELEVATION_WINDOW_MS = ");
-  Serial.println(BOOT_MANUAL_ELEVATION_WINDOW_MS);
 
   Serial.print("EL_PWM_FAST = ");
   Serial.println(EL_PWM_FAST);

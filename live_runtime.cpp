@@ -4,7 +4,7 @@
   Dieses Modul enthaelt die fachliche Ablaufsteuerung:
   - Hauptmenue, Ausrichten/Mitte, Suchen, Manuell
   - Kandidatenentscheidung PLUS/MINUS
-  - Signal optimieren nach PLUS
+  - PLUS bestaetigt Kandidaten; automatische Optimierung ist deaktiviert
   - Live-Status fuer Web-UI und TFT
 
   Wichtige Trennung: web_server.cpp zeigt und bedient nur; die eigentliche
@@ -54,6 +54,7 @@
 #include "azimuth_control.h"
 #include "rf_detector.h"
 #include "control_state.h"
+#include "wifi_manager.h"   // V3: Zugriff auf IP-Adresse und verbundenes WLAN fuer die TFT-Info-Seite.
 #include "live_runtime.h"
 
 namespace {
@@ -73,20 +74,33 @@ namespace {
   // =====================================================
   // Hauptmenue-Auswahl
   // =====================================================
-  // Das Hauptmenue hat vier feste Punkte:
+  // Das Hauptmenue hat fuenf feste Punkte:
   // 1 = Ausrichten: Nach Sueden grob ausrichten, Elevation mit +/- korrigieren,
   //     MODE startet danach die getestete Mitten-/Referenzfahrt.
   // 2 = Automatik starten
   // 3 = manuelle Azimutsteuerung
   // 4 = manuelle Elevationssteuerung
+  // 5 = Info: zeigt lokale Netzwerkdaten, insbesondere die IP-Adresse.
   enum MainMenuSelection {
     MENU_ITEM_CENTER    = 1,
     MENU_ITEM_AUTO      = 2,
     MENU_ITEM_MANUAL_AZ = 3,
-    MENU_ITEM_MANUAL_EL = 4
+    MENU_ITEM_MANUAL_EL = 4,
+    MENU_ITEM_INFO      = 5
   };
 
   MainMenuSelection mainMenuSelection = MENU_ITEM_CENTER;
+
+  // V3: Separater TFT-Infobildschirm aus dem Hauptmenue.
+  // Er zeigt lokale Netzwerkdaten wie IP-Adresse/WLAN-Status und bietet zusaetzlich
+  // einen bewusst einfachen lokalen Resetpunkt fuer den ESP32 an.
+  // Damit kann der Controller auch ohne Web-UI neu gestartet werden.
+  bool tftInfoScreenActive = false;
+
+  // V3: Auswahl innerhalb der TFT-Info-Seite.
+  // false = zurueck ins Hauptmenue, true = ESP32 neu starten.
+  // Der Reset wird erst mit MODE ausgefuehrt; PLUS/MINUS schalten nur die Auswahl um.
+  bool tftInfoResetSelected = false;
 
   // Im Menuepunkt 1 wird zuerst nur die Ausrichtung vorbereitet.
   // Die eigentliche Azimut-Referenzfahrt startet erst mit MODE.
@@ -229,10 +243,11 @@ namespace {
     AUTO_STATE_NEW_CHANGE_ELEVATION_WAIT,    // Altzustand bleibt aus Kompatibilitaet, wird in V3 nicht mehr aktiv genutzt.
     AUTO_STATE_EZ_ADJUST_HINT,               // V3: Mitte erreicht, Hoehe manuell pruefen und Suchlauf ggf. wiederholen.
 
-    // V3: Signaloptimierung nach PLUS-Bestaetigung eines Kandidaten.
-    // Der Nutzer entscheidet weiterhin, ob der Satellit richtig ist. Erst dann
-    // sucht die Anlage automatisch ein lokales RF-Minimum: zuerst Azimut,
-    // danach Winkel/Elevation. Die Schrittweiten liegen zentral in settings.cpp.
+    // V3: Reservierte Altzustände der entfernten Signaloptimierung.
+    // Diese Zustaende werden in der aktuellen Bedienlinie nicht mehr gestartet.
+    // PLUS bestaetigt den Kandidaten und laesst die Anlage an der geprueften
+    // Position stehen. Die Altzustaende bleiben nur noch als sicherer
+    // Compile-/Fallback-Rahmen bestehen.
     AUTO_STATE_SIGNAL_OPT_AZ_EAST_START,
     AUTO_STATE_SIGNAL_OPT_AZ_EAST_WAIT,
     AUTO_STATE_SIGNAL_OPT_AZ_WEST_START,
@@ -242,11 +257,8 @@ namespace {
     AUTO_STATE_SIGNAL_OPT_EL_DOWN_START,
     AUTO_STATE_SIGNAL_OPT_EL_DOWN_WAIT,
 
-    // V3: Rueckfahrt nach konservativer Signaloptimierung.
-    // Die Optimierung darf den vom Nutzer bestaetigten TV-Punkt nicht verlieren.
-    // Deshalb wird am Ende immer zur besten stabil bestaetigten Position
-    // zurueckgefahren; wenn keine klare Verbesserung gefunden wurde, ist das
-    // automatisch die urspruengliche PLUS-Position.
+    // V3: Reservierte Rueckfahrzustaende der entfernten Optimierung.
+    // Sie werden aktuell nicht mehr angesteuert.
     AUTO_STATE_SIGNAL_OPT_RETURN_AZ_START,
     AUTO_STATE_SIGNAL_OPT_RETURN_AZ_WAIT,
     AUTO_STATE_SIGNAL_OPT_RETURN_EL_START,
@@ -473,22 +485,15 @@ namespace {
   int autoCycleIndex = 0;
 
   // =====================================================
-  // Signaloptimierung nach Kandidaten-Bestaetigung
+  // Reservierte Altwerte der entfernten Signaloptimierung
   // =====================================================
   // Kommentarstand: V3
   //
-  // PLUS im Kandidatenmodus bedeutet nicht mehr nur "fertig", sondern:
-  // "richtiger Satellit erkannt, jetzt Signal optimieren".
-  //
-  // Die Optimierung arbeitet bewusst einfach und testbar:
-  // - RF wird als ADC-Wert bewertet. Kleinerer ADC = staerkeres Signal.
-  // - zuerst werden kleine Azimut-Schritte getestet
-  // - danach werden kleine Winkel-/Elevationsschritte getestet
-  // - alle Schrittzeiten und Grenzwerte liegen zentral in settings.cpp
-  //
-  // Wichtig:
-  // Das ist keine alte Feinsuche mit separatem Menue. Die Routine startet nur
-  // nach bewusster PLUS-Bestaetigung durch den Nutzer.
+  // Die automatische Optimierung nach PLUS wurde nach dem Live-Test aus der
+  // Bedienung entfernt. PLUS bestaetigt aktuell den Kandidaten und behaelt
+  // die vom Nutzer gepruefte Position. Diese Variablen bleiben nur noch als
+  // interner Alt-/Fallback-Rahmen bestehen, damit spaeter eine neue, bewusst
+  // geplante Optimierung auf bekannten Namen aufbauen koennte.
   float signalOptBestAdc = 4095.0f;
   float signalOptLastAdc = 4095.0f;
   float signalOptStartAdc = 4095.0f;
@@ -2062,7 +2067,7 @@ static void updateAutoStrategy() {
       return;
 
     // -------------------------------------------------
-    // Signaloptimierung nach PLUS-Bestaetigung
+    // Reservierte Altzustaende der entfernten Signaloptimierung
     // -------------------------------------------------
     case AUTO_STATE_SIGNAL_OPT_AZ_EAST_START:
       if (!signalOptIssueAzStep(AZ_DIR_EAST)) {
@@ -2253,7 +2258,7 @@ static const char* autoStateText() {
     case AUTO_STATE_SIGNAL_OPT_RETURN_AZ_WAIT: return "OPT RUECK AZ";
     case AUTO_STATE_SIGNAL_OPT_RETURN_EL_START:
     case AUTO_STATE_SIGNAL_OPT_RETURN_EL_WAIT: return "OPT RUECK WINKEL";
-    case AUTO_STATE_COMPLETE:                return "SAT OPTIMIERT";
+    case AUTO_STATE_COMPLETE:                return "SAT BESTAETIGT";
     case AUTO_STATE_FAILED:                  return "FAILED";
     default:                                 return "UNKNOWN";
   }
@@ -2290,7 +2295,7 @@ static const char* autoInfoText() {
     case AUTO_STATE_SIGNAL_OPT_RETURN_AZ_WAIT: return "SIGNAL: RUECKFAHRT AZ BESTPUNKT";
     case AUTO_STATE_SIGNAL_OPT_RETURN_EL_START:
     case AUTO_STATE_SIGNAL_OPT_RETURN_EL_WAIT: return "SIGNAL: RUECKFAHRT WINKEL BESTPUNKT";
-    case AUTO_STATE_COMPLETE:                return "SIGNAL: OPTIMUM GEFUNDEN";
+    case AUTO_STATE_COMPLETE:                return "SATELLIT BESTAETIGT";
     case AUTO_STATE_FAILED:                  return autoFailReason;
     default:                                 return "INFO: ---";
   }
@@ -2364,7 +2369,7 @@ const char* liveGetAzimuthStateText() {
       case AUTO_STATE_SIGNAL_OPT_RETURN_AZ_WAIT: return "Signal opt. Rueck AZ";
       case AUTO_STATE_SIGNAL_OPT_RETURN_EL_START:
       case AUTO_STATE_SIGNAL_OPT_RETURN_EL_WAIT: return "Signal opt. Rueck Winkel";
-      case AUTO_STATE_COMPLETE:                return "optimiert";
+      case AUTO_STATE_COMPLETE:                return "bestaetigt";
       case AUTO_STATE_FAILED:                  return "fehler";
       default:                                 return "wartet";
     }
@@ -2410,7 +2415,7 @@ const char* liveGetElevationStateText() {
       case AUTO_STATE_SIGNAL_OPT_EL_UP_WAIT:   return "winkel hoch";
       case AUTO_STATE_SIGNAL_OPT_EL_DOWN_START:
       case AUTO_STATE_SIGNAL_OPT_EL_DOWN_WAIT: return "winkel runter";
-      case AUTO_STATE_COMPLETE:                return "signal optimiert";
+      case AUTO_STATE_COMPLETE:                return "bestaetigt";
       case AUTO_STATE_FAILED:                  return "auto fehler";
       default:                                 return "auto aktiv";
     }
@@ -2496,11 +2501,26 @@ const char* liveGetInfoText() {
       return infoBuf;
     }
 
+
     if (autoSetupActive) {
       snprintf(infoBuf, sizeof(infoBuf),
                "AUTO_SETUP|EZ=MANUELL|TARGET=%.1f",
                DEFAULT_TARGET_ELEVATION);
       return infoBuf;
+    }
+
+    if (tftInfoScreenActive) {
+      static char ipInfoBuf[128];
+      const String ip = wifiGetIpString();
+      const String ssid = wifiGetConnectedSsid();
+      // V3: Fuer die TFT-Info-Seite werden nur stabile Werte ausgegeben.
+      // Der RSSI-Wert schwankt laufend und wuerde sonst ein staendiges
+      // Neuzeichnen/Flaechenflackern der Infoanzeige verursachen.
+      snprintf(ipInfoBuf, sizeof(ipInfoBuf),
+               "INFO_SCREEN|IP=%s|SSID=%s|RESET=%d",
+               ip.c_str(), ssid.c_str(),
+               tftInfoResetSelected ? 1 : 0);
+      return ipInfoBuf;
     }
 
     snprintf(infoBuf, sizeof(infoBuf),
@@ -2532,7 +2552,7 @@ bool liveIsCandidateHold() {
 
 
 // Web-/Diagnose-Status: richtiger Satellit wurde bestaetigt.
-// confirmRightSatellite() setzt autoHasPeak=true und AUTO_STATE_COMPLETE.
+// PLUS setzt autoHasPeak=true und AUTO_STATE_COMPLETE; Signaloptimierung ist deaktiviert.
 bool liveIsSatelliteConfirmed() {
   return autoHasPeak || autoState == AUTO_STATE_COMPLETE;
 }
@@ -2567,7 +2587,7 @@ const char* liveGetRfQualityText() {
   // V3: RF-Bewertung anhand der praktischen Aussentest-Grenzen.
   // Diese Ampel dient nur der Anzeige/Diagnose. Sie blockiert bewusst keine
   // Benutzerentscheidung: Wenn der Nutzer im Kandidatenmodus PLUS drueckt,
-  // wird die Signaloptimierung auch bei schwachem RF-Wert gestartet.
+  // wird der Satellit bestaetigt. Die RF-Ampel bewertet nur die Signalstaerke.
   //
   // Wichtig fuer AD8317/AD8318 im aktuellen Aufbau:
   // kleinerer ADC-Wert = staerkeres Signal.
@@ -2579,64 +2599,9 @@ const char* liveGetRfQualityText() {
 }
 
 
-// V3: Strukturierte Statusfunktionen fuer die Web-UI-Seite
-// "Signal optimieren". Die Web-UI soll nicht interne AUTO-State-Namen
-// parsen muessen. Deshalb liefert die Runtime hier bewusst einfache Werte:
-// - aktiv: Optimierung laeuft gerade wirklich
-// - Phase/Info: Klartext fuer Anzeige
-// - Start/Best/Current ADC: Diagnose fuer den Testlauf
-// Kleinerer ADC-Wert bedeutet staerkeres Signal.
-bool liveSignalOptimizationActive() {
-  switch (autoState) {
-    case AUTO_STATE_SIGNAL_OPT_AZ_EAST_START:
-    case AUTO_STATE_SIGNAL_OPT_AZ_EAST_WAIT:
-    case AUTO_STATE_SIGNAL_OPT_AZ_WEST_START:
-    case AUTO_STATE_SIGNAL_OPT_AZ_WEST_WAIT:
-    case AUTO_STATE_SIGNAL_OPT_EL_UP_START:
-    case AUTO_STATE_SIGNAL_OPT_EL_UP_WAIT:
-    case AUTO_STATE_SIGNAL_OPT_EL_DOWN_START:
-    case AUTO_STATE_SIGNAL_OPT_EL_DOWN_WAIT:
-      return true;
-    default:
-      return false;
-  }
-}
-
-const char* liveGetSignalOptimizationPhaseText() {
-  switch (autoState) {
-    case AUTO_STATE_SIGNAL_OPT_AZ_EAST_START:
-    case AUTO_STATE_SIGNAL_OPT_AZ_EAST_WAIT:
-      return "Azimut Richtung Ost pruefen";
-    case AUTO_STATE_SIGNAL_OPT_AZ_WEST_START:
-    case AUTO_STATE_SIGNAL_OPT_AZ_WEST_WAIT:
-      return "Azimut Richtung West pruefen";
-    case AUTO_STATE_SIGNAL_OPT_EL_UP_START:
-    case AUTO_STATE_SIGNAL_OPT_EL_UP_WAIT:
-      return "Winkel Plus pruefen";
-    case AUTO_STATE_SIGNAL_OPT_EL_DOWN_START:
-    case AUTO_STATE_SIGNAL_OPT_EL_DOWN_WAIT:
-      return "Winkel Minus pruefen";
-    case AUTO_STATE_COMPLETE:
-      return "Signal optimiert";
-    default:
-      return "Optimierung bereit";
-  }
-}
-
-const char* liveGetSignalOptimizationInfoText() {
-  if (liveSignalOptimizationActive()) {
-    return "Die Anlage testet kleine Azimut- und Winkelschritte. Kleinerer RF-ADC bedeutet besseres Signal.";
-  }
-  if (autoState == AUTO_STATE_COMPLETE) {
-    return "Die Optimierung ist beendet. Die Anlage steht am besten gefundenen Punkt.";
-  }
-  return "Diese Ansicht ist eine versteckte Diagnoseansicht. Sie wird automatisch geoeffnet, wenn Signal optimieren wirklich laeuft.";
-}
-
-float liveGetSignalOptimizationStartAdc() { return signalOptStartAdc; }
-float liveGetSignalOptimizationBestAdc()  { return signalOptBestAdc; }
-float liveGetSignalOptimizationCurrentAdc() { return rfGetFilteredAdc(); }
-int liveGetSignalOptimizationStepsInPhase() { return signalOptStepsInPhase; }
+// V3: Die frueheren Web-Statusfunktionen fuer "Signal optimieren" wurden
+// entfernt. PLUS bestaetigt den Kandidaten nur noch und laesst die Anlage an
+// der vom Nutzer geprueften Position stehen.
 
 bool liveHallCenter() { return azimuthIsCenterDetected(); }
 bool liveHallEast()   { return azimuthIsEastLimitDetected(); }
@@ -3531,12 +3496,16 @@ static void abortCenterModeToMenu() {
 // =====================================================
 
 static void selectNextMainMenuItem() {
+  tftInfoScreenActive = false;
+
   if (mainMenuSelection == MENU_ITEM_CENTER) {
     mainMenuSelection = MENU_ITEM_AUTO;
   } else if (mainMenuSelection == MENU_ITEM_AUTO) {
     mainMenuSelection = MENU_ITEM_MANUAL_AZ;
   } else if (mainMenuSelection == MENU_ITEM_MANUAL_AZ) {
     mainMenuSelection = MENU_ITEM_MANUAL_EL;
+  } else if (mainMenuSelection == MENU_ITEM_MANUAL_EL) {
+    mainMenuSelection = MENU_ITEM_INFO;
   } else {
     mainMenuSelection = MENU_ITEM_CENTER;
   }
@@ -3546,7 +3515,11 @@ static void selectNextMainMenuItem() {
 }
 
 static void selectPreviousMainMenuItem() {
+  tftInfoScreenActive = false;
+
   if (mainMenuSelection == MENU_ITEM_CENTER) {
+    mainMenuSelection = MENU_ITEM_INFO;
+  } else if (mainMenuSelection == MENU_ITEM_INFO) {
     mainMenuSelection = MENU_ITEM_MANUAL_EL;
   } else if (mainMenuSelection == MENU_ITEM_MANUAL_EL) {
     mainMenuSelection = MENU_ITEM_MANUAL_AZ;
@@ -3577,10 +3550,18 @@ static void executeMainMenuSelection() {
       break;
 
     case MENU_ITEM_MANUAL_EL:
-    default:
       liveCommandEnterManual();
       setManualAxis(MANUAL_AXIS_EL);
       Serial.println("MENUE 4: Manuell EZ.");
+      break;
+
+    case MENU_ITEM_INFO:
+    default:
+      stopManualActuators();
+      autoSetupActive = false;
+      tftInfoScreenActive = true;
+      enterMainMenuMode();
+      Serial.println("MENUE 5: Info / IP-Adresse.");
       break;
   }
 }
@@ -3643,26 +3624,22 @@ static void confirmRightSatellite() {
   stopManualActuators();
   clearModeMultiClick();
 
-  // V3: PLUS bedeutet: Der Nutzer bestaetigt den richtigen Satelliten.
-  // Danach wird nicht sofort "fertig" gemeldet, sondern die neue Funktion
-  // "Signal optimieren" gestartet. Diese sucht mit kleinen AZ- und Winkel-
-  // Schritten nach dem lokalen RF-Minimum.
+  // V3: PLUS bedeutet wieder nur: Der Nutzer bestaetigt den richtigen
+  // Satelliten. Die automatische Funktion "Signal optimieren" wurde aus
+  // Bedienung und Web-UI entfernt, weil sie im Live-Test noch nicht zuverlaessig
+  // genug gearbeitet hat. Die bestaetigte Position bleibt dadurch erhalten.
   //
-  // Wichtig: Die alten MINUS-/Falsch-Satellitenbereiche bleiben unveraendert.
-  // Nur der PLUS-Pfad wurde erweitert.
-  autoHasPeak = false;
-
-  // V3: PLUS wird nicht durch die RF-Ampel gesperrt. Der Nutzer sieht
-  // ggf. bereits ein TV-Bild und darf die Optimierung daher auch starten,
-  // wenn der gemessene RF-Wert nach Aussentest-Grenze noch als schwach gilt.
-  // Die Ampel wird nur protokolliert, die Optimierungsroutine bleibt gleich.
+  // MINUS/Falsch-Satellitenbereiche bleiben unveraendert.
   rfUpdate();
-  Serial.print("AUTO: Richtiger Satellit bestaetigt -> Signal optimieren | RF_ADC=");
+  autoHasPeak = true;
+  autoState = AUTO_STATE_COMPLETE;
+
+  Serial.print("AUTO V3: Richtiger Satellit bestaetigt | RF_ADC=");
   Serial.print(rfGetFilteredAdc(), 1);
   Serial.print(" | Bewertung=");
   Serial.println(liveGetRfQualityText());
-  signalOptStartFromCandidate();
 }
+
 
 static void evaluateCandidateModeClicks() {
   // MODE-Kurzklick hat im Kandidatenmodus keine Funktion mehr.
@@ -3767,7 +3744,7 @@ static void processButtonLogic() {
   }
 
   // -------------------------------------------------
-  // Hauptmenue: PLUS/MINUS waehlt Punkt 1-4, MODE bestaetigt.
+  // Hauptmenue: PLUS/MINUS waehlt Punkt 1-5, MODE bestaetigt.
   // Wenn Suche ausgewaehlt wurde, erscheint zuerst ein Such-Setup.
   // Dort korrigieren PLUS/MINUS die Hoehe, MODE startet den Suchlauf.
   // -------------------------------------------------
@@ -3790,6 +3767,54 @@ static void processButtonLogic() {
           return;
         }
       }
+      return;
+    }
+
+    if (tftInfoScreenActive) {
+      // V3: Info-Seite mit zwei Auswahlpunkten:
+      // - IP-Anzeige: reine Information, MODE kurz bestaetigt nichts
+      // - RESET: ESP32-Neustart nach MODE kurz
+      // MODE lang fuehrt immer zurueck ins Hauptmenue. So kann der Nutzer die
+      // Seite sicher verlassen, ohne versehentlich einen Neustart auszuloesen.
+      if (btnPlus.pressEvent || btnMinus.pressEvent) {
+        tftInfoResetSelected = !tftInfoResetSelected;
+        Serial.print("INFO V3: Auswahl = ");
+        Serial.println(tftInfoResetSelected ? "RESET" : "IP");
+        return;
+      }
+
+      if (btnMode.pressEvent) {
+        modePressStartMs = millis();
+        modeLongHandled = false;
+        return;
+      }
+
+      if (btnMode.stablePressed && !modeLongHandled && count == 1) {
+        if (millis() - modePressStartMs >= BTN_MODE_LONGPRESS_MS) {
+          tftInfoScreenActive = false;
+          tftInfoResetSelected = false;
+          modeLongHandled = true;
+          Serial.println("INFO V3: MODE lang -> Hauptmenue.");
+          return;
+        }
+      }
+
+      if (btnMode.releaseEvent && !modeLongHandled) {
+        if (tftInfoResetSelected) {
+          // V3: Lokaler Reset aus der TFT-Info-Seite.
+          // Vor dem Neustart werden beide Motorachsen sicher gestoppt und eine
+          // eventuell laufende Suche/Mittenfahrt abgebrochen.
+          Serial.println("INFO V3: ESP Reset ueber TFT-Info-Menue.");
+          abortAutoSequence();
+          stopManualActuators();
+          delay(150);
+          ESP.restart();
+        } else {
+          Serial.println("INFO V3: IP-Anzeige bestaetigt, keine Aktion.");
+        }
+        return;
+      }
+
       return;
     }
 

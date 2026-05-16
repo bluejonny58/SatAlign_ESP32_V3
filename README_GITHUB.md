@@ -7,7 +7,6 @@ Diese Version ist fuer GitHub vorbereitet.
 Alle technischen Mess-, Kalibrier- und Projektwerte bleiben im Code, zum Beispiel:
 
 - RF-Grenzwerte aus den Aussentests
-- Signaloptimierungs-Schrittwerte
 - Winkel-/Offsetwerte
 - Softlimits
 - Pinbelegung
@@ -45,7 +44,6 @@ Die Beispielplatzhalter in `secrets.example.h` sind absichtlich neutral.
 
 ## Lokaler Compile
 
-Diese ZIP enthaelt eine neutrale `secrets.h`, damit der Sketch grundsaetzlich kompiliert.
-Vor dem Upload auf den ESP32 muessen dort die eigenen WLAN- und OTA-Daten eingetragen werden.
+Diese ZIP enthaelt bewusst keine `secrets.h`. Vor dem Kompilieren muss lokal eine eigene `secrets.h` aus `secrets.example.h` erstellt werden.
 
 `WEB_SERVER_PORT` ist kein Geheimnis und steht in `config.h` auf Port 80.

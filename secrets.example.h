@@ -19,12 +19,13 @@ struct WifiCredential {
   const char* password;
 };
 
-// V3: Reihenfolge = Prioritaet.
-// Die Anlage versucht zuerst Netzwerk 1, dann Netzwerk 2, dann Netzwerk 3.
+// V3: Zwei bekannte Netzwerke.
+// Die Anlage scannt die sichtbaren WLANs und verbindet sich mit dem bekannten
+// Netzwerk mit der besseren Signalstaerke. Bei gleicher Signalstaerke bleibt
+// diese Reihenfolge die Prioritaet.
 static const WifiCredential WIFI_NETWORKS[] = {
   { "WLAN_NAME_1", "WLAN_PASSWORT_1" },
-  { "WLAN_NAME_2", "WLAN_PASSWORT_2" },
-  { "WLAN_NAME_3", "WLAN_PASSWORT_3" }
+  { "WLAN_NAME_2", "WLAN_PASSWORT_2" }
 };
 
 static const int WIFI_NETWORK_COUNT =

@@ -127,6 +127,7 @@ static const uint16_t C_MANUAL     = rgb565(80, 255, 130);
 static const uint16_t C_AUTO       = rgb565(70, 170, 255);
 static const uint16_t C_SEARCH     = rgb565(255, 185, 25);
 static const uint16_t C_WARN       = rgb565(255, 70, 70);
+static const uint16_t C_WARN_LIGHT = rgb565(255, 180, 180);
 // Ruhige Menuefarben: farbig, aber einheitlich.
 // Hauptmenue: bewusst ruhige Farbfamilie statt vieler Einzel-Farben.
 // Farben bestehen. Ein gemeinsames Blau/Grau-Design bleibt gut lesbar und
@@ -174,7 +175,7 @@ static bool firstRender = true;
 // Hauptmenue-Displayfix:
 // DisplayData speichert infoText nur als const char* Zeiger.
 // liveGetInfoText() liefert fuer das Hauptmenue jedoch einen wiederverwendeten
-// statischen Textpuffer mit MENUE_SEL=1..4. Wenn lastData nur diesen Zeiger
+// statischen Textpuffer mit MENUE_SEL=1..5. Wenn lastData nur diesen Zeiger
 // merkt, zeigen data.infoText und lastData.infoText spaeter auf denselben
 // aktuellen Pufferinhalt. Ein Vergleich ueber String(data.infoText) gegen
 // String(lastData.infoText) erkennt dann die geaenderte Menueauswahl nicht.
@@ -295,7 +296,7 @@ void displayInit() {
 // Kommentarstand: V3
 //
 // Der fruehere Start-/Splashtext war nur ein Verdrahtungshinweis. Beim echten
-// Aussentest stoerte er, weil zwischen Splash, MPU-Test und EZ-Start kurz
+// Aussentest stoerte er, weil zwischen Splash, MPU-Test und Hauptmenue kurz
 // unruhige Zwischenbilder sichtbar wurden. Die Funktion bleibt aus
 // Kompatibilitaetsgruenden erhalten, zeigt aber nur einen sauberen schwarzen
 // Bildschirm und gibt sofort weiter.
@@ -348,163 +349,8 @@ void displayShowMpuBootTestResult(bool ok, float relativeAngleDeg) {
 // Kommentarstand: V3
 //
 // Diese Anzeige ist bewusst ein eigener Vollbildschirm und kein normaler
-// Live-Render. Der Grund: Die Funktion wird im Boot-Ablauf ausgeführt, noch
-// bevor Hauptmenue, Web-UI oder AUTO/Suche aktiv sind.
-//
-// Darstellungsprinzip fuer den Ausseneinsatz:
-// - heller/oranger Kopfbereich solange gefahren wird
-// - gruene Kopf-/Statusflaeche erst bei erreichtem Ziel
-// - gelb/orange Statusflaeche bei Timeout/Hinweis
-// - schwarzer Text auf hellen Flaechen, weil das bei ungünstigem Licht oft
-//   besser lesbar ist als duenne farbige Schrift auf dunklem Grund
-// - Countdown unten rechts, solange die Boot-Anfahrt laeuft oder prueft
-//
-// Live-Test-Hintergrund V3:
-// Beim Einschalten waren auf dem TFT kurze Rudimente alter/halb gezeichneter
-// Inhalte sichtbar. Deshalb zeichnet diese Funktion einen klaren Vollbildschirm
-// mit schwarzer Basis und festen Wertfeldern. Die aufrufende Logik begrenzt die
-// Aktualisierung auf ca. 1x pro Sekunde, damit die Anzeige nicht flackert und
-// Soll/Ist/Restzeit trotz kleinem 128x128-Display lesbar bleiben.
-
-// Kommentarstand: V3
-void displayShowManualElevationStart(float currentDeg, float recommendedDeg, bool upPressed, bool downPressed, long remainingSeconds) {
-  // V3: Manueller EZ-Start ersetzt den frueheren automatischen EZ-Start
-  // mit harter Timeout-/Fehlerwirkung. Die Anzeige ist bewusst ruhig und
-  // freundlich gestaltet: Helles Blau bedeutet "Einstellfenster aktiv", nicht
-  // Warnung oder Fehler. Der Nutzer hat ca. 15 Sekunden Zeit, die Elevation
-  // mit PLUS/MINUS grob auf den empfohlenen Startbereich zu bringen.
-  //
-  // Wichtig V3:
-  // Diese Funktion bleibt reine Anzeige. Die Zeitlogik, Tastenabfrage und
-  // Motorfreigabe liegen im Hauptsketch. Dadurch bleibt die Trennung zwischen
-  // Display und Steuerlogik erhalten.
-  const uint16_t headerColor = C_MENU;       // helles Blau: ruhiger Hinweiszustand
-  const uint16_t valueColor  = C_MENU;
-  tft.fillScreen(C_BG);
-
-  tft.fillRect(0, 0, SCREEN_W, 26, headerColor);
-  writeText(6, 6, ST77XX_BLACK, headerColor, 2, "EZ START");
-
-  tft.fillRoundRect(6, 32, SCREEN_W - 12, 42, 6, valueColor);
-  tft.drawRoundRect(6, 32, SCREEN_W - 12, 42, 6, C_TEXT);
-  String istLine = "IST ";
-  istLine += String(currentDeg, 1);
-  writeText(14, 44, ST77XX_BLACK, valueColor, 2, istLine);
-
-  String sollLine = "Ziel ";
-  sollLine += String(recommendedDeg, 1);
-  writeText(10, 80, C_TEXT, C_BG, 1, sollLine);
-
-  if (remainingSeconds >= 0) {
-    String timeLine = "Zeit ";
-    timeLine += String(remainingSeconds);
-    timeLine += "s";
-    writeText(72, 80, C_TEXT, C_BG, 1, timeLine);
-  }
-
-  const char* motorText = "WARTET";
-  uint16_t motorColor = C_IDLE;
-  if (upPressed && !downPressed) {
-    motorText = "PLUS: HOCH";
-    motorColor = C_SIGNAL_OK;
-  } else if (downPressed && !upPressed) {
-    motorText = "MINUS: RUNTER";
-    motorColor = C_WARN_YEL;
-  } else if (upPressed && downPressed) {
-    motorText = "STOP";
-    motorColor = C_WARN;
-  }
-
-  tft.fillRoundRect(6, 94, 116, 16, 4, motorColor);
-  tft.drawRoundRect(6, 94, 116, 16, 4, C_TEXT);
-  writeText(12, 99, ST77XX_BLACK, motorColor, 1, motorText);
-
-  writeText(8, 116, C_TEXT, C_BG, 1, "MODE = weiter");
-
-  firstRender = true;
-  lastWasSpecialScreen = true;
-}
-
-// Kommentarstand: V3
-void displayShowBootElevationTarget(float currentDeg, float targetDeg, bool moving, bool done, bool timeout, long remainingSeconds) {
-  uint16_t headerColor = C_SEARCH;
-  const char* title = "EZ START";
-
-  if (done) {
-    headerColor = C_SIGNAL_OK;
-    title = "EZ OK";
-  } else if (timeout) {
-    // V3: Boot-EZ-Timeout ist hier bewusst kein roter Fehlerzustand.
-    // Der Live-Test hat gezeigt, dass der Motor/Sensor manchmal noch nicht
-    // stabil innerhalb der Toleranz bestaetigt, obwohl die Grundfunktion laeuft.
-    // Deshalb wird dieser Zustand als gelb/oranger Hinweis angezeigt.
-    headerColor = C_WARN_YEL;
-    title = "EZ ZEIT";
-  }
-
-  // V3: Ruhiger Boot-EZ-Bildschirm.
-  //
-  // Im Live-Test war der EZ-Start schwer lesbar, weil der Bildschirm sehr
-  // oft komplett neu aufgebaut wurde. Deshalb wird hier weiterhin ein
-  // Vollbild gezeichnet, aber die aufrufende Boot-Logik aktualisiert nur noch
-  // in groesseren Abstaenden. Die Anzeige ist absichtlich klar gegliedert:
-  // grosser Titel, grosser Soll-/Ist-Bereich und ein Countdown.
-  //
-  // Schwarzer Grund entfernt Start-Rudimente, helle Statusflaechen liefern bei
-  // unguenstigem Licht mehr Kontrast. Der Text auf den hellen Flaechen ist
-  // schwarz, weil das auf dem kleinen ST7735 draussen besser lesbar ist.
-  tft.fillScreen(C_BG);
-
-  tft.fillRect(0, 0, SCREEN_W, 28, headerColor);
-  writeText(8, 6, C_BG, headerColor, 2, title);
-
-  // Grosser Messblock: weniger Text, dafuer feste Positionen und klare Werte.
-  tft.fillRoundRect(6, 34, SCREEN_W - 12, 54, 6, headerColor);
-  tft.drawRoundRect(6, 34, SCREEN_W - 12, 54, 6, C_TEXT);
-  tft.drawRoundRect(7, 35, SCREEN_W - 14, 52, 6, C_TEXT);
-
-  String targetLine = "SOLL ";
-  targetLine += String(targetDeg, 1);
-  writeText(14, 42, C_BG, headerColor, 2, targetLine);
-
-  String currentLine = "IST  ";
-  currentLine += String(currentDeg, 1);
-  writeText(14, 66, C_BG, headerColor, 2, currentLine);
-
-  if (done) {
-    tft.fillRoundRect(6, 94, 116, 26, 5, C_SIGNAL_OK);
-    writeText(12, 102, C_BG, C_SIGNAL_OK, 1, "Standard-EZ erreicht");
-    firstRender = true;
-    lastWasSpecialScreen = true;
-  } else if (timeout) {
-    // V3: Timeout als Hinweis statt Fehler.
-    // Rot bleibt echten Fehlern vorbehalten. Beim Boot-EZ-Timeout soll der
-    // Anwender nur sehen: Die definierte Zeit ist erreicht, EZ bitte pruefen.
-    tft.fillRoundRect(6, 94, 116, 26, 5, C_WARN_YEL);
-    tft.drawRoundRect(6, 94, 116, 26, 5, C_TEXT);
-    writeText(12, 102, C_BG, C_WARN_YEL, 1, "Zeit erreicht / pruefen");
-    firstRender = true;
-    lastWasSpecialScreen = true;
-  } else {
-    const char* stateText = moving ? "fahre zur Standard-EZ" : "pruefe / warte";
-    writeText(8, 94, moving ? C_SEARCH : C_TEXT, C_BG, 1, stateText);
-
-    // V3: Sichtbarer Countdown fuer den EZ-Start.
-    // Er zeigt dem User, dass die Startpositionierung noch arbeitet und nicht
-    // eingefroren ist. 30 Sekunden geben dem Aktuator mehr Zeit zum
-    // Einpendeln als die vorherigen 15 Sekunden.
-    if (remainingSeconds >= 0) {
-      String timeoutLine = "TIME ";
-      timeoutLine += String(remainingSeconds);
-      timeoutLine += "s";
-
-      tft.fillRoundRect(70, 106, 52, 18, 4, C_WARN_YEL);
-      tft.drawRoundRect(70, 106, 52, 18, 4, C_TEXT);
-      writeText(76, 111, C_BG, C_WARN_YEL, 1, timeoutLine);
-    }
-  }
-}
-
+// V3: Die frueheren Boot-EZ-Startanzeigen wurden entfernt.
+// Info-/Sued-Hinweis und Hauptmenue sind die einzigen Boot-Anzeigen.
 
 void displayShowSouthAlignPrompt() {
   tft.fillScreen(C_BG);
@@ -715,18 +561,86 @@ static void drawMainMenuScreen(const char* infoText) {
   if (info.indexOf("MENUE_SEL=2") >= 0) sel = 2;
   if (info.indexOf("MENUE_SEL=3") >= 0) sel = 3;
   if (info.indexOf("MENUE_SEL=4") >= 0) sel = 4;
+  if (info.indexOf("MENUE_SEL=5") >= 0) sel = 5;
 
   tft.fillRect(0, 0, SCREEN_W, 21, C_MENU_BLUE);
   writeText(8, 3, C_TEXT, C_MENU_BLUE, 2, "MENUE");
 
-  drawMenuItem(25, 1, "Ausrichten", C_MENU_BLUE,   sel == 1);
-  drawMenuItem(45, 2, "Suche",      C_MENU_ORANGE, sel == 2);
-  drawMenuItem(65, 3, "Manuell AZ", C_MENU_GREEN,  sel == 3);
-  drawMenuItem(85, 4, "Manuell EZ", C_MENU_PURPLE, sel == 4);
+  drawMenuItem(23, 1, "Ausrichten", C_MENU_BLUE,   sel == 1);
+  drawMenuItem(42, 2, "Suche",      C_MENU_ORANGE, sel == 2);
+  drawMenuItem(61, 3, "Manuell AZ", C_MENU_GREEN,  sel == 3);
+  drawMenuItem(80, 4, "Manuell EZ", C_MENU_PURPLE, sel == 4);
+  drawMenuItem(99, 5, "Info / IP",  C_MENU_DIM,    sel == 5);
 
-  tft.drawFastHLine(6, 105, SCREEN_W - 12, C_BORDER);
-  writeText(8, 110, C_TEXT, C_BG, 1, "+/- Auswahl");
-  writeText(8, 121, C_TEXT, C_BG, 1, "MODE=OK");
+  tft.drawFastHLine(6, 118, SCREEN_W - 12, C_BORDER);
+  writeText(8, 121, C_TEXT, C_BG, 1, "+/- Wahl  MODE=OK");
+}
+
+
+static String infoValue(const String& source, const String& key) {
+  const String token = key + "=";
+  int start = source.indexOf(token);
+  if (start < 0) return String("-");
+  start += token.length();
+  int end = source.indexOf('|', start);
+  if (end < 0) end = source.length();
+  return source.substring(start, end);
+}
+
+static String fitTftText(String text, uint8_t maxChars) {
+  // V3: Schutz gegen ueberlaufende TFT-Texte.
+  // Gerade IP-/WLAN-Informationen koennen je nach Netzwerkname laenger werden
+  // als eine 128-px-Zeile. Deshalb werden lange Werte bewusst gekuerzt, statt
+  // in den rechten Displayrand oder in die naechste Zeile hinein zu laufen.
+  if (text.length() <= maxChars) return text;
+  if (maxChars <= 1) return text.substring(0, maxChars);
+  return text.substring(0, maxChars - 1) + "~";
+}
+
+static void drawInfoAction(int x, int y, int w, const String& label, bool selected, uint16_t selectedColor, uint16_t idleColor) {
+  // V3: Lokale Auswahlbuttons der TFT-Info-Seite.
+  // Der RESET-Button bleibt im Ruhezustand hellrot und wird bei Auswahl
+  // deutlich rot. Dadurch ist vor dem Neustart eindeutig erkennbar, welche
+  // Aktion mit MODE kurz bestaetigt wird.
+  const uint16_t bg = selected ? selectedColor : idleColor;
+  const uint16_t fg = selected ? C_TEXT : C_BG;
+  tft.fillRoundRect(x, y, w, 18, 3, bg);
+  tft.drawRoundRect(x, y, w, 18, 3, selectedColor);
+  tft.drawRoundRect(x + 1, y + 1, w - 2, 16, 3, selectedColor);
+  writeText(x + 5, y + 6, fg, bg, 1, label);
+}
+
+static void drawInfoIpScreen(const char* infoText) {
+  tft.fillScreen(C_BG);
+
+  const String info = infoText ? String(infoText) : String("");
+  const String ip = fitTftText(infoValue(info, "IP"), 18);
+  const String ssid = fitTftText(infoValue(info, "SSID"), 18);
+  const bool resetSelected = infoValue(info, "RESET") == "1";
+
+  // V3: Die Info-Seite ist ein lokaler Auswahlbildschirm mit zwei Punkten:
+  // - IP: reine Anzeige der aktuellen Netzwerkdaten
+  // - RESET: Neustart des ESP32 nach MODE kurz
+  // RSSI wird auf dem TFT bewusst nicht laufend angezeigt, damit die Seite
+  // nicht durch wechselnde Signalwerte dauernd neu gezeichnet wird.
+  tft.fillRect(0, 0, SCREEN_W, 21, C_MENU_BLUE);
+  writeText(8, 3, C_TEXT, C_MENU_BLUE, 2, "INFO");
+
+  const uint16_t ipBg = resetSelected ? C_BG : C_MENU;
+  const uint16_t ipFg = resetSelected ? C_TEXT : C_BG;
+  tft.fillRoundRect(5, 26, SCREEN_W - 10, 47, 5, ipBg);
+  tft.drawRoundRect(5, 26, SCREEN_W - 10, 47, 5, C_MENU_BLUE);
+  tft.drawRoundRect(6, 27, SCREEN_W - 12, 45, 5, C_MENU_BLUE);
+  writeText(10, 32, ipFg, ipBg, 1, "IP");
+  writeText(30, 32, ipFg, ipBg, 1, ip);
+  writeText(10, 53, ipFg, ipBg, 1, "WLAN");
+  writeText(45, 53, ipFg, ipBg, 1, ssid);
+
+  drawInfoAction(8, 82, 112, "RESET", resetSelected, C_WARN, C_WARN_LIGHT);
+
+  tft.drawFastHLine(6, 108, SCREEN_W - 12, C_BORDER);
+  writeText(8, 113, C_TEXT, C_BG, 1, "+/- waehlen");
+  writeText(8, 123, C_TEXT, C_BG, 1, "MODE OK | lang Menue");
 }
 
 static void drawAutoSetupScreen(const char* infoText) {
@@ -1066,14 +980,25 @@ void displayRender(const DisplayData& data) {
   // Das Hauptmenue ist ein eigener Vollbild-Zustand.
   // Es zeigt bewusst keine RF-/AZ-/EL-Livewerte, damit der Startzustand eindeutig ist.
   if (data.mode == UI_MODE_MENU) {
+    const String currentMenuInfoText = data.infoText ? String(data.infoText) : String("");
+
+    if (currentMenuInfoText.indexOf("INFO_SCREEN") >= 0) {
+      if (firstRender || data.mode != lastData.mode || currentMenuInfoText != lastMenuInfoText) {
+        drawInfoIpScreen(data.infoText);
+        lastMenuInfoText = currentMenuInfoText;
+      }
+
+      lastData = data;
+      firstRender = false;
+      return;
+    }
+
     // Infozeile:
     // Hauptmenue-Auswahl nicht ueber lastData.infoText vergleichen.
     // lastData.infoText ist nur ein Zeiger auf den statischen Runtime-Puffer
     // und kann dadurch denselben aktuellen Inhalt wie data.infoText zeigen.
-    // Mit der eigenen String-Kopie lastMenuInfoText wird MENUE_SEL=1..4
+    // Mit der eigenen String-Kopie lastMenuInfoText wird MENUE_SEL=1..5
     // zuverlaessig erkannt und das Hauptmenue nach PLUS/MINUS neu gezeichnet.
-    const String currentMenuInfoText = data.infoText ? String(data.infoText) : String("");
-
     if (firstRender || data.mode != lastData.mode || currentMenuInfoText != lastMenuInfoText) {
       drawMainMenuScreen(data.infoText);
       lastMenuInfoText = currentMenuInfoText;

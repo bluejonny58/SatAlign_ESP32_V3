@@ -7,7 +7,7 @@
 
   Aktueller Bedienfokus V3:
   - klare Menues ohne ueberfluessige Diagnose auf Bedienseiten
-  - Suchen mit RF-Ampel und optionaler Signaloptimierung
+  - Suchen mit RF-Ampel; PLUS bestaetigt Kandidaten ohne automatische Optimierung
   - Hall-Sensoren verstaendlich als Center/Ost/West anzeigen
   - Live-Aktualisierung ohne komplettes Neuladen, wo es fuer Tests hilft
 */
@@ -42,6 +42,7 @@
 #include <WebServer.h>
 
 #include "wifi_config.h"
+#include "wifi_manager.h"
 #include "web_server.h"
 #include "config.h"
 #include "live_runtime.h"
@@ -185,7 +186,7 @@ static String rfQualityClass(const String& q) {
   if (q == "sehr gut" || q == "gut") return "good";
 
   // V3: Die RF-Ampel ist nur eine Anzeige-/Diagnosehilfe.
-  // Sie sperrt PLUS bzw. die Signaloptimierung bewusst nicht.
+  // Sie sperrt PLUS bewusst nicht; der Nutzer entscheidet am TV/Receiver.
   // Trotzdem soll "schwach" optisch klar rot sein, damit ein fehlendes
   // oder sehr schwaches Signal nicht wie ein brauchbarer Hinweis wirkt.
   if (q == "brauchbar") return "warn";
@@ -227,7 +228,7 @@ static String navLink(const String& href, const String& label, const String& pag
 // Kommentarstand: V3
 // Die Stufen orientieren sich an den Aussentests mit realem TV-Bild.
 // kleinerer ADC-Wert = staerkeres Signal. Diese Anzeige ist nur eine Ampel;
-// sie blockiert PLUS/Signaloptimierung bewusst nicht.
+// sie blockiert PLUS bewusst nicht; der Nutzer entscheidet am TV/Receiver.
 // V3: "schwach" wird eindeutig rot dargestellt. Gelb/Orange ist nur fuer
 // "brauchbar" reserviert, damit kein Signalzustand falsch positiv wirkt.
 //
@@ -512,18 +513,18 @@ static String buildAutoPage() {
   // Buttons angezeigt, die im aktuellen Zustand wirklich sinnvoll sind.
   // Jeder sichtbare Aktionsbutton loest eine echte Runtime-Funktion aus.
   if (candidate) {
-    // V3: Die RF-Ampel bewertet den Kandidaten, blockiert aber keine
-    // Nutzerentscheidung. Wenn der Nutzer am TV ein Bild sieht und PLUS
-    // drueckt, startet die Signaloptimierung auch bei schwachem RF-Wert.
+    // V3: Die RF-Ampel bewertet nur die Signalstaerke. Ob es der richtige
+    // Satellit ist, entscheidet weiterhin der Nutzer am Receiver/TV.
+    // Die fruehere Funktion "Signal optimieren" ist aus der Web-UI entfernt.
     html += "<div class='chips'>" + chip("SAT-KANDIDAT", "blue") + chip("Signal " + rfQuality, rfQualityClass(rfQuality)) + "</div>";
     html += "<div class='pageLead'>Bitte am Receiver/TV pruefen, ob es der richtige Satellit ist. Die RF-Ampel ist nur eine Hilfe; die Entscheidung trifft der Nutzer.</div>";
     html += row("RF-Bewertung", rfQuality + " / " + String(liveGetRfFilteredAdc(), 0) + " ADC");
     html += "<div class='ctrl3' style='margin-top:12px'>";
-    html += actionButton("/candidate/ok", "+ OK / Signal optimieren", true, "green");
+    html += actionButton("/candidate/ok", "+ OK", true, "green");
     html += actionButton("/candidate/false", "- FALSCH", true, "orange");
     html += actionButton("/auto/abort", "ABBRUCH", true, "red");
     html += "</div>";
-    html += "<div class='note'>+ OK startet immer die Signaloptimierung. - FALSCH sperrt diesen Bereich und die Suche laeuft weiter.</div>";
+    html += "<div class='note'>+ OK bestaetigt den Satelliten und bleibt an der aktuellen Position. - FALSCH sperrt diesen Bereich und die Suche laeuft weiter.</div>";
 
   } else if (autoSetup) {
     const String ezNow = String(liveGetRelativeAngleDeg(), 1);
@@ -719,8 +720,8 @@ static String diagnoseRecommendation() {
 // Diese Seite bleibt bewusst textlastiger als die Bedienseiten, weil sie dem
 // Nutzer vor Ort schnelle Pruefpunkte liefern soll: Receiver an, RF plausibel,
 // MPU bereit, Hall-Sensoren plausibel, Suche korrekt gestartet.
-// V3: Von hier aus ist auch die reine Anzeige der Signaloptimierung
-// erreichbar; die Seite startet bewusst keine Motoren.
+// V3: Die fruehere Signaloptimierungsseite wurde aus der Bedienung entfernt.
+// Troubleshooting bleibt auf Diagnose, manuelle Korrektur und Statuswerte fokussiert.
 static String buildTroubleshootingPage() {
   String cls = diagnoseClass();
   String html;
@@ -735,12 +736,6 @@ static String buildTroubleshootingPage() {
   html += "<div class='grid2' style='margin-top:12px'>";
   html += actionButton("/status", "Statuswerte", true, "primary");
   html += actionButton("/manuell", "Manuell korrigieren", true, "orange");
-  // V3: Die Optimierungsseite ist eine reine Anzeige-/Diagnoseseite.
-  // Sie startet keine Motoren und ist deshalb im Troubleshooting sinnvoll
-  // erreichbar, damit der Optimierungslauf auch offline/geplant geprüft
-  // werden kann. Wenn die echte Signaloptimierung läuft, wird diese Seite
-  // weiterhin automatisch geöffnet.
-  html += actionButton("/optimierung", "Signaloptimierung anzeigen", true, "gray");
   html += "</div>";
   html += "</div>";
 
@@ -748,6 +743,12 @@ static String buildTroubleshootingPage() {
   html += row("Receiver", "muss eingeschaltet sein");
   html += row("RF", String(liveGetRfVoltage(), 3) + " V - " + String(liveGetRfQualityText()));
   html += row("Winkel", String(liveGetRelativeAngleDeg(), 2) + " deg");
+  // V3: Die Hilfe-Seite zeigt die aktuellen Netzwerkdaten direkt mit an.
+  // Dadurch kann der Nutzer die Web-UI-Adresse auch ohne Serial Monitor
+  // ablesen bzw. pruefen, ob das ausgewaehlte WLAN und RSSI plausibel sind.
+  html += row("WLAN", wifiGetConnectedSsid());
+  html += row("IP-Adresse", wifiGetIpString());
+  html += row("WLAN-Signal", wifiGetRssiString());
   html += "<div id='hallTroubleRow' class='row " + hallSensorRowClass() + "'><span>Hall-Sensoren</span><b id='hallTrouble'>" + hallSensorSummary() + "</b></div>";
   html += row("Info", liveGetInfoText());
   // V3: Auch im Troubleshooting wird die Hall-Zeile live farblich aktualisiert.
@@ -766,69 +767,9 @@ static String buildTroubleshootingPage() {
 }
 
 
-// Versteckte / automatische Seite fuer "Signal optimieren".
-// Kommentarstand: V3
-//
-// Zweck:
-// - Wenn der Nutzer im Kandidatenmodus PLUS drueckt, startet die Runtime
-//   die Signaloptimierung. Dann soll die Web-UI nicht auf der normalen
-//   Suchseite stehen bleiben, sondern den Optimierungslauf sichtbar machen.
-// - Fuer Offline-/Werkstatttests gibt es diese Seite auch direkt unter
-//   /optimierung. Sie startet dabei bewusst keine Motoren; sie zeigt nur den
-//   aktuellen bzw. zuletzt bekannten Optimierungsstatus.
-//
-// Wichtig:
-// Die Optimierungslogik bleibt vollstaendig in live_runtime.cpp. Diese Seite
-// zeigt nur Phase, RF aktuell, besten RF-Wert und Winkel an.
-static String buildSignalOptimizationPage() {
-  String html;
-  reserveHtml(html, 9500);
-  html = htmlHeader("Signal optimieren", "auto");
-
-  const bool active = liveSignalOptimizationActive();
-  const String phase = liveGetSignalOptimizationPhaseText();
-  const String info = liveGetSignalOptimizationInfoText();
-  const float rfNow = liveGetSignalOptimizationCurrentAdc();
-  const float rfBest = liveGetSignalOptimizationBestAdc();
-  const float rfStart = liveGetSignalOptimizationStartAdc();
-  const String q = liveGetRfQualityText();
-
-  html += "<div class='card'><div class='title'><h2><span class='step'>2</span>Signal optimieren</h2></div>";
-  if (active) {
-    html += "<div class='chips'>" + chip("OPTIMIERUNG LAEUFT", "blue") + chip(phase, phaseClass(phase)) + chip("Signal " + q, rfQualityClass(q)) + "</div>";
-    html += "<div class='pageLead'>Die Anlage sucht jetzt das lokale Signalmaximum. Dabei gilt: kleinerer RF-ADC-Wert = staerkeres Signal.</div>";
-  } else if (liveIsSatelliteConfirmed()) {
-    html += "<div class='chips'>" + chip("OPTIMIERUNG BEENDET", "good") + chip("Signal " + q, rfQualityClass(q)) + "</div>";
-    html += "<div class='pageLead'>Die Signaloptimierung ist beendet oder der Satellit wurde bereits bestaetigt.</div>";
-  } else {
-    html += "<div class='chips'>" + chip("DIAGNOSEANSICHT", "violet") + chip("nicht aktiv", "neutral") + "</div>";
-  }
-
-  html += "<div class='row'><span>Phase</span><b id='optPhase'>" + phase + "</b></div>";
-  html += "<div class='row'><span>Info</span><b id='optInfo'>" + info + "</b></div>";
-  html += "<div class='row'><span>RF aktuell</span><b id='optRfNow'>" + String(rfNow, 1) + " ADC / " + String(liveGetRfVoltage(), 3) + " V - " + q + "</b></div>";
-  html += "<div class='row'><span>RF bester Wert</span><b id='optRfBest'>" + String(rfBest, 1) + " ADC</b></div>";
-  html += "<div class='row'><span>RF Startwert</span><b id='optRfStart'>" + String(rfStart, 1) + " ADC</b></div>";
-  html += "<div class='row'><span>Winkel</span><b id='optAngle'>" + String(liveGetRelativeAngleDeg(), 2) + " deg</b></div>";
-  html += "<div class='row'><span>Schritte in Phase</span><b id='optSteps'>" + String(liveGetSignalOptimizationStepsInPhase()) + "</b></div>";
-
-  html += "<div class='grid2' style='margin-top:12px'>";
-  html += actionButton("/auto/abort", active ? "OPTIMIERUNG ABBRECHEN" : "SUCHE ABBRECHEN", true, "red");
-  html += actionButton("/auto", "ZURUECK ZUR SUCHE", true, "primary");
-  html += "</div>";
-
-  // V3: Nur Livewerte aktualisieren, kein komplettes Neuladen. Wenn die
-  // Optimierung fertig ist, bleibt die Seite kurz sichtbar und wechselt danach
-  // zur Suchseite, wo das Ergebnis/der neue Zustand angezeigt wird.
-  html += "<script>";
-  html += "function setTxt(id,v){var e=document.getElementById(id);if(e)e.textContent=v;}";
-  html += "let doneSeen=0;function updateOpt(){fetch('/api/optimierung/status',{cache:'no-store'}).then(r=>r.json()).then(d=>{setTxt('optPhase',d.phase);setTxt('optInfo',d.info);setTxt('optRfNow',d.rfNow);setTxt('optRfBest',d.rfBest);setTxt('optRfStart',d.rfStart);setTxt('optAngle',d.angle);setTxt('optSteps',d.steps);if(!d.active&&d.confirmed){doneSeen++;if(doneSeen>4)window.location='/auto';}}).catch(()=>{});}setInterval(updateOpt,500);updateOpt();";
-  html += "</script>";
-  html += "</div>";
-  html += rfCard();
-  html += htmlFooter();
-  return html;
-}
+// V3: Die Web-Seite fuer die fruehere Signaloptimierung wurde entfernt.
+// PLUS bestaetigt wieder nur den richtigen Satelliten; eine automatische
+// Optimierung wird in dieser Projektlinie bewusst nicht mehr angeboten.
 
 // Status-/Diagnoseseite.
 // Hier werden moeglichst viele Roh- und Laufzeitwerte zusammengefuehrt.
@@ -846,6 +787,9 @@ static String buildStatusPage() {
   html += row("Azimut", liveGetAzimuthStateText());
   html += row("Winkel", liveGetElevationStateText());
   html += row("Info", liveGetInfoText());
+  html += row("WLAN", wifiGetConnectedSsid());
+  html += row("IP-Adresse", wifiGetIpString());
+  html += row("WLAN-Signal", wifiGetRssiString());
   html += row("Winkel", String(liveGetRelativeAngleDeg(), 2) + " deg");
   html += row("MPU gefiltert", String(liveGetFilteredAngleDeg(), 2) + " deg");
   html += row("RAW ADC", String(liveGetRfRawAdc()));
@@ -856,11 +800,6 @@ static String buildStatusPage() {
   html += row("Blocked Sat Bereiche", String(liveGetBlockedRangeCount()));
   html += "<div class='note'>Diese Seite zeigt bewusst mehr Diagnosewerte als das TFT.</div>";
   html += actionButton("/trouble", "Troubleshooting", true, "orange");
-  // V3: Versteckte Diagnose-Schaltflaeche fuer Offline-Tests der Seite
-  // "Signal optimieren". Sie startet keine Optimierung und bewegt keinen Motor.
-  // Normalerweise wird /optimierung automatisch geoeffnet, wenn die Optimierung
-  // nach PLUS wirklich laeuft.
-  html += "<div class='mini' style='margin-top:8px;text-align:right'><a href='/optimierung' style='color:#8aa0b3;text-decoration:none'>Optimierung anzeigen</a></div>";
   html += "</div>";
 
   html += "<div class='card'><div class='title'><h2>System</h2></div>";
@@ -957,28 +896,8 @@ static void sendAutoStatusJson() {
   server.send(200, "application/json", json);
 }
 
-// JSON-API fuer die Seite "Signal optimieren".
-// V3: Diese API ist reine Anzeige/Diagnose. Sie startet keine Optimierung,
-// faehrt keine Motoren und veraendert keine Suchlogik.
-static void sendOptimizationStatusJson() {
-  const String q = liveGetRfQualityText();
-  const String rfNow = String(liveGetSignalOptimizationCurrentAdc(), 1) + " ADC / " + String(liveGetRfVoltage(), 3) + " V - " + q;
-  const String rfBest = String(liveGetSignalOptimizationBestAdc(), 1) + " ADC";
-  const String rfStart = String(liveGetSignalOptimizationStartAdc(), 1) + " ADC";
-
-  String json = "{";
-  json += "\"active\":" + jsonBool(liveSignalOptimizationActive()) + ",";
-  json += "\"confirmed\":" + jsonBool(liveIsSatelliteConfirmed()) + ",";
-  json += "\"phase\":\"" + jsonEsc(liveGetSignalOptimizationPhaseText()) + "\",";
-  json += "\"info\":\"" + jsonEsc(liveGetSignalOptimizationInfoText()) + "\",";
-  json += "\"rfNow\":\"" + jsonEsc(rfNow) + "\",";
-  json += "\"rfBest\":\"" + jsonEsc(rfBest) + "\",";
-  json += "\"rfStart\":\"" + jsonEsc(rfStart) + "\",";
-  json += "\"angle\":\"" + jsonEsc(String(liveGetRelativeAngleDeg(), 2) + " deg") + "\",";
-  json += "\"steps\":\"" + String(liveGetSignalOptimizationStepsInPhase()) + "\"";
-  json += "}";
-  server.send(200, "application/json", json);
-}
+// V3: Die JSON-API der frueheren Signaloptimierungsseite wurde entfernt.
+// Die normalen Livewerte fuer Suche, Manuell und Hall-Sensoren bleiben erhalten.
 
 // JSON-API fuer die manuelle Seite.
 // Liefert nur kompakte Statuswerte, damit JavaScript die Buttonfarben und die
@@ -1101,14 +1020,9 @@ static void handleAusrichtenPage() {
 static void handleAutoPage() {
   Serial.println("WEB V3: GET /auto");
 
-  // V3: Wenn die Signaloptimierung nach PLUS wirklich laeuft, soll die
-  // Web-UI automatisch die eigene Optimierungsseite zeigen. Dadurch sieht der
-  // Nutzer Phase, aktuellen RF-Wert und besten RF-Wert statt einer normalen
-  // Suchseite. Diese Weiterleitung startet selbst keine Motoren.
-  if (liveSignalOptimizationActive()) {
-    redirectTo("/optimierung");
-    return;
-  }
+  // V3: Die automatische Signaloptimierung ist aus dieser Bedienlinie entfernt.
+  // Die Suche bleibt bewusst bei Kandidat, OK/Falsch und manueller
+  // Winkelpruefung. PLUS bestaetigt den Kandidaten und behaelt die Position.
 
   // V3: Beim Oeffnen der Web-Seite "Suchen" soll auch das TFT das
   // Such-Setup anzeigen. Gleichzeitig darf eine laufende Suche NICHT durch
@@ -1192,7 +1106,6 @@ static void handleElStop() { liveCommandElStop(); redirectTo("/manuell"); }
 
 static void handleApiCenterStatus() { sendCenterStatusJson(); }
 static void handleApiAutoStatus() { sendAutoStatusJson(); }
-static void handleApiOptimizationStatus() { sendOptimizationStatusJson(); }
 static void handleApiManualStatus() { sendManualStatusJson(); }
 static void handleApiHallStatus() { sendHallStatusJson(); }
 static void handleApiAzPlus() { liveCommandAzButtonPlus(); sendManualStatusJson(); }
@@ -1213,11 +1126,11 @@ static void handleSystemResetExecute() {
   // 1) Motoren stoppen.
   // 2) Diese Warteseite an den Browser senden.
   // 3) ESP32 neu starten.
-  // 4) Die Warteseite wartet laenger als das Boot-/Winkel-Startfenster und
-  //    prueft danach wiederholt, ob die Standardseite / wieder erreichbar ist.
+  // 4) Die Warteseite prueft danach wiederholt, ob die Standardseite /
+  //    wieder erreichbar ist.
   // Dadurch ist die Rueckkehr deutlich robuster als ein einmaliger Meta-Refresh,
-  // weil der ESP32 waehrend Neustart, Winkel-Startfenster und WLAN-Verbindung
-  // fuer einige Sekunden keine HTTP-Anfragen beantworten kann.
+  // weil der ESP32 waehrend Neustart und WLAN-Verbindung fuer einige Sekunden
+  // keine HTTP-Anfragen beantworten kann.
   String html;
   html.reserve(2600);
   html += F("<!DOCTYPE html><html><head><meta charset='utf-8'>");
@@ -1248,12 +1161,7 @@ static void handleSystemResetExecute() {
 }
 
 
-static void handleOptimizationPage() {
-  Serial.println("WEB V3: GET /optimierung");
-  sendHtml(buildSignalOptimizationPage());
-}
-
-static void handleCandidateOk() { liveCommandConfirmSatellite(); redirectTo("/optimierung"); }
+static void handleCandidateOk() { liveCommandConfirmSatellite(); redirectTo("/auto"); }
 static void handleCandidateFalse() { liveCommandCandidateFalse(); redirectTo("/auto"); }
 
 static void handleNotFound() {
@@ -1278,7 +1186,6 @@ void webServerInit() {
   server.on("/auto", handleAutoPage);
   server.on("/manuell", handleManualPage);
   server.on("/status", handleStatusPage);
-  server.on("/optimierung", handleOptimizationPage); // V3: versteckte/automatische Optimierungsseite.
   server.on("/trouble", handleTroublePage);
   server.on("/system/reset", handleResetConfirmPage);
   server.on("/system/reset/confirm", handleSystemResetExecute);
@@ -1309,7 +1216,6 @@ void webServerInit() {
 
   server.on("/api/center/status", handleApiCenterStatus);
   server.on("/api/auto/status", handleApiAutoStatus);
-  server.on("/api/optimierung/status", handleApiOptimizationStatus);
   server.on("/api/manual/status", handleApiManualStatus);
   server.on("/api/hall/status", handleApiHallStatus);
   server.on("/api/az/plus", handleApiAzPlus);

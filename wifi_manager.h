@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Arduino.h>
+
 // Initialisiert die WLAN-Verbindung des ESP32.
 //
 // Typischer Ablauf intern:
@@ -28,3 +30,15 @@ void wifiLoop();
 // - spätere Statusanzeigen
 // - eventuelle Web-/Netzwerklogik
 bool wifiIsConnected();
+
+// Liefert die aktuell zugewiesene IP-Adresse als Text.
+// Wenn keine WLAN-Verbindung besteht, wird "keine Verbindung" geliefert.
+String wifiGetIpString();
+
+// Liefert den Namen des aktuell verbundenen WLANs oder einen Hinweis,
+// falls keine Verbindung besteht.
+String wifiGetConnectedSsid();
+
+// Liefert die aktuelle WLAN-Signalstaerke als Text, z. B. "-55 dBm".
+// Wenn keine Verbindung besteht, wird "-" geliefert.
+String wifiGetRssiString();
