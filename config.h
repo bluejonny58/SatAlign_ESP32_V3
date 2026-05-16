@@ -245,6 +245,7 @@ extern unsigned long SIGNAL_OPT_EL_STEP_MS;
 extern unsigned long SIGNAL_OPT_EL_SETTLE_MS;
 extern float SIGNAL_OPT_RF_IMPROVE_ADC;
 extern float SIGNAL_OPT_RF_WORSE_ADC;
+extern float SIGNAL_OPT_RETURN_EL_TOLERANCE_DEG;
 // V3: Primaere AZ-Grenze ist der Ost-/West-Hallsensor.
 // Die folgende maximale AZ-Schrittzahl ist nur ein Sicherheitslimit.
 extern int SIGNAL_OPT_AZ_MAX_STEPS_PER_DIR;

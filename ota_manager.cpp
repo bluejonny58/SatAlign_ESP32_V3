@@ -27,8 +27,8 @@ namespace {
 }
 
 void otaInit() {
-  // OTA-Passwort fuer Arduino-IDE / Netzwerk-Port.
-  // Der Nutzer verwendet dieses Passwort bereits in der Praxis.
+  // V3: OTA-Passwort fuer Arduino-IDE / Netzwerk-Port.
+  // Der echte Wert steht lokal in secrets.h und wird nicht zu GitHub hochgeladen.
   ArduinoOTA.setPassword(OTA_PASSWORD);
 
   // V3: Standard-OTA-Port explizit setzen.

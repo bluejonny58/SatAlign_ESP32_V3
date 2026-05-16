@@ -319,18 +319,26 @@ float RF_TV_STRONG_MAX_ADC = 750.0f;   // unterhalb: sehr guter/Peak-naher Berei
 // sucht die Anlage zuerst in Azimut-Schritten und danach in Winkel-/
 // Elevationsschritten nach dem niedrigsten stabilen RF-ADC-Wert.
 //
+// V3 nach Live-Test:
+// Die Optimierung ist bewusst konservativ. Der vom Nutzer mit PLUS
+// bestaetigte Punkt wird als sicherer TV-Punkt behandelt. Die Anlage testet
+// nur kleine Schritte und uebernimmt einen neuen Bestpunkt erst bei klarer
+// Verbesserung. Am Ende wird zur besten gespeicherten Position zurueckgefahren.
+//
 // RF-Logik im aktuellen Aufbau:
 // kleinerer ADC-Wert = staerkeres Signal.
-unsigned long SIGNAL_OPT_AZ_STEP_MS = 180;
-unsigned long SIGNAL_OPT_AZ_SETTLE_MS = 350;
-unsigned long SIGNAL_OPT_EL_STEP_MS = 160;
-unsigned long SIGNAL_OPT_EL_SETTLE_MS = 700;
-float SIGNAL_OPT_RF_IMPROVE_ADC = 20.0f;
-float SIGNAL_OPT_RF_WORSE_ADC = 45.0f;
+unsigned long SIGNAL_OPT_AZ_STEP_MS = 80;
+unsigned long SIGNAL_OPT_AZ_SETTLE_MS = 700;
+unsigned long SIGNAL_OPT_EL_STEP_MS = 60;
+unsigned long SIGNAL_OPT_EL_SETTLE_MS = 1000;
+float SIGNAL_OPT_RF_IMPROVE_ADC = 40.0f;
+float SIGNAL_OPT_RF_WORSE_ADC = 70.0f;
+float SIGNAL_OPT_RETURN_EL_TOLERANCE_DEG = 1.0f;
 // V3: Primaere AZ-Grenze ist der Ost-/West-Hallsensor.
 // Die folgende maximale AZ-Schrittzahl ist nur ein Sicherheitslimit.
-int SIGNAL_OPT_AZ_MAX_STEPS_PER_DIR = 8;
-int SIGNAL_OPT_EL_MAX_STEPS_PER_DIR = 5;
+// Fuer die konservative Optimierung sind die Testwege bewusst kurz.
+int SIGNAL_OPT_AZ_MAX_STEPS_PER_DIR = 2;
+int SIGNAL_OPT_EL_MAX_STEPS_PER_DIR = 1;
 
 // =====================================================
 // Speicherstrategie / No-NVS-Betrieb
@@ -435,14 +443,15 @@ static void applyDefaultSettings() {
 
   // Signaloptimierung nach PLUS-Bestaetigung eines Kandidaten.
   // V3: Startwerte fuer den Aussentest; bewusst zentral anpassbar.
-  SIGNAL_OPT_AZ_STEP_MS = 180;
-  SIGNAL_OPT_AZ_SETTLE_MS = 350;
-  SIGNAL_OPT_EL_STEP_MS = 160;
-  SIGNAL_OPT_EL_SETTLE_MS = 700;
-  SIGNAL_OPT_RF_IMPROVE_ADC = 20.0f;
-  SIGNAL_OPT_RF_WORSE_ADC = 45.0f;
-  SIGNAL_OPT_AZ_MAX_STEPS_PER_DIR = 8;
-  SIGNAL_OPT_EL_MAX_STEPS_PER_DIR = 5;
+  SIGNAL_OPT_AZ_STEP_MS = 80;
+  SIGNAL_OPT_AZ_SETTLE_MS = 700;
+  SIGNAL_OPT_EL_STEP_MS = 60;
+  SIGNAL_OPT_EL_SETTLE_MS = 1000;
+  SIGNAL_OPT_RF_IMPROVE_ADC = 40.0f;
+  SIGNAL_OPT_RF_WORSE_ADC = 70.0f;
+  SIGNAL_OPT_RETURN_EL_TOLERANCE_DEG = 1.0f;
+  SIGNAL_OPT_AZ_MAX_STEPS_PER_DIR = 2;
+  SIGNAL_OPT_EL_MAX_STEPS_PER_DIR = 1;
 }
 
 // Speichert aktuell nichts dauerhaft.
@@ -586,6 +595,8 @@ void printSettingsToSerial() {
   Serial.println(SIGNAL_OPT_RF_IMPROVE_ADC, 1);
   Serial.print("SIGNAL_OPT_RF_WORSE_ADC = ");
   Serial.println(SIGNAL_OPT_RF_WORSE_ADC, 1);
+  Serial.print("SIGNAL_OPT_RETURN_EL_TOLERANCE_DEG = ");
+  Serial.println(SIGNAL_OPT_RETURN_EL_TOLERANCE_DEG, 2);
   Serial.print("SIGNAL_OPT_AZ_MAX_STEPS_PER_DIR = ");
   Serial.println(SIGNAL_OPT_AZ_MAX_STEPS_PER_DIR);
   Serial.print("SIGNAL_OPT_EL_MAX_STEPS_PER_DIR = ");

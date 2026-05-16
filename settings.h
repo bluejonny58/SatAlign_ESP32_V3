@@ -64,5 +64,6 @@ extern unsigned long SIGNAL_OPT_EL_STEP_MS;
 extern unsigned long SIGNAL_OPT_EL_SETTLE_MS;
 extern float SIGNAL_OPT_RF_IMPROVE_ADC;
 extern float SIGNAL_OPT_RF_WORSE_ADC;
+extern float SIGNAL_OPT_RETURN_EL_TOLERANCE_DEG;
 extern int SIGNAL_OPT_AZ_MAX_STEPS_PER_DIR;
 extern int SIGNAL_OPT_EL_MAX_STEPS_PER_DIR;

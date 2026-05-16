@@ -242,6 +242,16 @@ namespace {
     AUTO_STATE_SIGNAL_OPT_EL_DOWN_START,
     AUTO_STATE_SIGNAL_OPT_EL_DOWN_WAIT,
 
+    // V3: Rueckfahrt nach konservativer Signaloptimierung.
+    // Die Optimierung darf den vom Nutzer bestaetigten TV-Punkt nicht verlieren.
+    // Deshalb wird am Ende immer zur besten stabil bestaetigten Position
+    // zurueckgefahren; wenn keine klare Verbesserung gefunden wurde, ist das
+    // automatisch die urspruengliche PLUS-Position.
+    AUTO_STATE_SIGNAL_OPT_RETURN_AZ_START,
+    AUTO_STATE_SIGNAL_OPT_RETURN_AZ_WAIT,
+    AUTO_STATE_SIGNAL_OPT_RETURN_EL_START,
+    AUTO_STATE_SIGNAL_OPT_RETURN_EL_WAIT,
+
     AUTO_STATE_COMPLETE,
     AUTO_STATE_FAILED
   };
@@ -482,6 +492,15 @@ namespace {
   float signalOptBestAdc = 4095.0f;
   float signalOptLastAdc = 4095.0f;
   float signalOptStartAdc = 4095.0f;
+
+  // V3: Sicherer Ausgangspunkt der PLUS-Bestaetigung.
+  // Dieser Punkt hat vom Nutzer bereits ein TV-Bild bzw. den richtigen
+  // Satelliten erhalten. Die Optimierung darf diesen Punkt daher nicht
+  // dauerhaft verlieren. Wenn keine eindeutige Verbesserung gefunden wird,
+  // faehrt die Anlage am Ende wieder hierher zurueck.
+  int signalOptHomeAzSteps = 0;
+  float signalOptHomeElevationDeg = 0.0f;
+
   int signalOptBestAzSteps = 0;
   float signalOptBestElevationDeg = 0.0f;
   uint8_t signalOptStepsInPhase = 0;
@@ -1551,6 +1570,13 @@ static void autoStopAzDrive() {
 // Ein kleinerer RF-ADC-Wert bedeutet staerkeres Signal. Die Optimierung sucht
 // daher ein lokales RF-Minimum, kein numerisches Maximum.
 //
+// V3 nach Aussentest:
+// Die Optimierung arbeitet konservativ. Der durch PLUS bestaetigte Punkt wird
+// als sichere Ausgangsposition gespeichert. Nur eine eindeutig bessere, stabile
+// RF-Messung darf als neuer Bestpunkt gelten. Am Ende faehrt die Anlage zur
+// besten gespeicherten Position zurueck. Wenn keine klare Verbesserung gefunden
+// wurde, bleibt bzw. endet sie wieder an der urspruenglichen PLUS-Position.
+//
 // Die Schrittweiten und Schwellen liegen bewusst in settings.cpp:
 // - SIGNAL_OPT_AZ_STEP_MS
 // - SIGNAL_OPT_EL_STEP_MS
@@ -1567,8 +1593,10 @@ static void signalOptResetFromCurrent() {
   signalOptStartAdc = adc;
   signalOptLastAdc = adc;
   signalOptBestAdc = adc;
-  signalOptBestAzSteps = azPositionSteps;
-  signalOptBestElevationDeg = currentRelativeAngle();
+  signalOptHomeAzSteps = azPositionSteps;
+  signalOptHomeElevationDeg = currentRelativeAngle();
+  signalOptBestAzSteps = signalOptHomeAzSteps;
+  signalOptBestElevationDeg = signalOptHomeElevationDeg;
   signalOptStepsInPhase = 0;
   signalOptStepStartedAtMs = 0;
   signalOptLastDiagMs = 0;
@@ -1582,10 +1610,22 @@ static void signalOptResetFromCurrent() {
 }
 
 static void signalOptUpdateBest(float adc) {
-  if (adc <= signalOptBestAdc - SIGNAL_OPT_RF_IMPROVE_ADC || adc < signalOptBestAdc) {
+  // V3: Konservative Bewertung nach Live-Test.
+  // Frueher wurde bereits jede minimale RF-Verbesserung als neuer Bestpunkt
+  // gespeichert. Das kann dazu fuehren, dass die Anlage vom bestaetigten
+  // TV-Punkt wegfaehrt, obwohl die Verbesserung nur Rauschen oder ein anderer
+  // RF-Peak ist. Jetzt wird ein neuer Bestpunkt nur uebernommen, wenn der
+  // ADC-Wert mindestens SIGNAL_OPT_RF_IMPROVE_ADC besser ist.
+  if (adc <= signalOptBestAdc - SIGNAL_OPT_RF_IMPROVE_ADC) {
     signalOptBestAdc = adc;
     signalOptBestAzSteps = azPositionSteps;
     signalOptBestElevationDeg = currentRelativeAngle();
+    Serial.print("SIGNAL OPT V3: neuer stabiler Bestpunkt | ADC=");
+    Serial.print(signalOptBestAdc, 1);
+    Serial.print(" | AZ=");
+    Serial.print(signalOptBestAzSteps);
+    Serial.print(" | Winkel=");
+    Serial.println(signalOptBestElevationDeg, 2);
   }
   signalOptLastAdc = adc;
 
@@ -1707,19 +1747,45 @@ static void signalOptStartElDownPhase() {
   Serial.println("SIGNAL OPT V3: Phase Winkel runter.");
 }
 
-static void signalOptFinish() {
+static void signalOptStartReturnToBest() {
+  autoStopAzDrive();
+  elevationStop();
+  manualElDirection = EL_DIR_STOP;
+
+  Serial.print("SIGNAL OPT V3: Tests fertig, Rueckfahrt zum besten sicheren Punkt | BEST_ADC=");
+  Serial.print(signalOptBestAdc, 1);
+  Serial.print(" | BEST_AZ=");
+  Serial.print(signalOptBestAzSteps);
+  Serial.print(" | BEST_WINKEL=");
+  Serial.print(signalOptBestElevationDeg, 2);
+  Serial.print(" | START_ADC=");
+  Serial.println(signalOptStartAdc, 1);
+
+  autoState = AUTO_STATE_SIGNAL_OPT_RETURN_AZ_START;
+}
+
+static void signalOptCompleteAtBest() {
   autoStopAzDrive();
   elevationStop();
   manualElDirection = EL_DIR_STOP;
   autoHasPeak = true;
   autoState = AUTO_STATE_COMPLETE;
 
-  Serial.print("SIGNAL OPT V3: Fertig | BEST_ADC=");
+  Serial.print("SIGNAL OPT V3: Abgeschlossen an bester Position | BEST_ADC=");
   Serial.print(signalOptBestAdc, 1);
-  Serial.print(" | BEST_AZ=");
-  Serial.print(signalOptBestAzSteps);
-  Serial.print(" | BEST_WINKEL=");
-  Serial.println(signalOptBestElevationDeg, 2);
+  Serial.print(" | AZ=");
+  Serial.print(azPositionSteps);
+  Serial.print(" | Winkel=");
+  Serial.println(currentRelativeAngle(), 2);
+}
+
+static void signalOptFinish() {
+  // V3: Nicht an der letzten Testposition stehen bleiben.
+  // Der Aussentest hat gezeigt, dass die Optimierung sonst den bestaetigten
+  // TV-Punkt verlieren kann. Daher wird am Ende immer zur besten gespeicherten
+  // Position zurueckgefahren. Ohne klare Verbesserung ist das die PLUS-
+  // Ausgangsposition.
+  signalOptStartReturnToBest();
 }
 
 static void signalOptStartFromCandidate() {
@@ -2094,6 +2160,51 @@ static void updateAutoStrategy() {
       autoState = AUTO_STATE_SIGNAL_OPT_EL_DOWN_START;
       return;
 
+    case AUTO_STATE_SIGNAL_OPT_RETURN_AZ_START: {
+      if (azPositionSteps == signalOptBestAzSteps) {
+        autoState = AUTO_STATE_SIGNAL_OPT_RETURN_EL_START;
+        return;
+      }
+
+      const AzimuthDirection dir = (azPositionSteps < signalOptBestAzSteps) ? AZ_DIR_EAST : AZ_DIR_WEST;
+      if (!canMoveAzimuth(dir)) {
+        Serial.println("SIGNAL OPT V3: Rueckfahrt AZ blockiert, pruefe Winkel Rueckfahrt.");
+        autoState = AUTO_STATE_SIGNAL_OPT_RETURN_EL_START;
+        return;
+      }
+
+      issueAzimuthPulse(dir, SIGNAL_OPT_AZ_STEP_MS);
+      applyAzStepFromDir(dir);
+      signalOptStepStartedAtMs = millis();
+      autoState = AUTO_STATE_SIGNAL_OPT_RETURN_AZ_WAIT;
+      return;
+    }
+
+    case AUTO_STATE_SIGNAL_OPT_RETURN_AZ_WAIT:
+      if (azimuthIsPulseActive()) return;
+      if (millis() - signalOptStepStartedAtMs < SIGNAL_OPT_AZ_SETTLE_MS) return;
+      autoState = AUTO_STATE_SIGNAL_OPT_RETURN_AZ_START;
+      return;
+
+    case AUTO_STATE_SIGNAL_OPT_RETURN_EL_START: {
+      const float nowDeg = currentRelativeAngle();
+      if (moveToRelativeElevationPulse(nowDeg, signalOptBestElevationDeg, SIGNAL_OPT_RETURN_EL_TOLERANCE_DEG)) {
+        signalOptCompleteAtBest();
+        return;
+      }
+      signalOptStepStartedAtMs = millis();
+      manualElDirection = (signalOptBestElevationDeg > nowDeg) ? EL_DIR_UP : EL_DIR_DOWN;
+      autoState = AUTO_STATE_SIGNAL_OPT_RETURN_EL_WAIT;
+      return;
+    }
+
+    case AUTO_STATE_SIGNAL_OPT_RETURN_EL_WAIT:
+      if (elevationIsPulseActive()) return;
+      if (millis() - signalOptStepStartedAtMs < SIGNAL_OPT_EL_SETTLE_MS) return;
+      manualElDirection = EL_DIR_STOP;
+      autoState = AUTO_STATE_SIGNAL_OPT_RETURN_EL_START;
+      return;
+
     case AUTO_STATE_COMPLETE:
       return;
 
@@ -2138,6 +2249,10 @@ static const char* autoStateText() {
     case AUTO_STATE_SIGNAL_OPT_EL_UP_WAIT:   return "OPT WINKEL +";
     case AUTO_STATE_SIGNAL_OPT_EL_DOWN_START:return "OPT WINKEL -";
     case AUTO_STATE_SIGNAL_OPT_EL_DOWN_WAIT: return "OPT WINKEL -";
+    case AUTO_STATE_SIGNAL_OPT_RETURN_AZ_START:
+    case AUTO_STATE_SIGNAL_OPT_RETURN_AZ_WAIT: return "OPT RUECK AZ";
+    case AUTO_STATE_SIGNAL_OPT_RETURN_EL_START:
+    case AUTO_STATE_SIGNAL_OPT_RETURN_EL_WAIT: return "OPT RUECK WINKEL";
     case AUTO_STATE_COMPLETE:                return "SAT OPTIMIERT";
     case AUTO_STATE_FAILED:                  return "FAILED";
     default:                                 return "UNKNOWN";
@@ -2171,6 +2286,10 @@ static const char* autoInfoText() {
     case AUTO_STATE_SIGNAL_OPT_EL_UP_WAIT:   return "SIGNAL: WINKEL PLUS TEST";
     case AUTO_STATE_SIGNAL_OPT_EL_DOWN_START:
     case AUTO_STATE_SIGNAL_OPT_EL_DOWN_WAIT: return "SIGNAL: WINKEL MINUS TEST";
+    case AUTO_STATE_SIGNAL_OPT_RETURN_AZ_START:
+    case AUTO_STATE_SIGNAL_OPT_RETURN_AZ_WAIT: return "SIGNAL: RUECKFAHRT AZ BESTPUNKT";
+    case AUTO_STATE_SIGNAL_OPT_RETURN_EL_START:
+    case AUTO_STATE_SIGNAL_OPT_RETURN_EL_WAIT: return "SIGNAL: RUECKFAHRT WINKEL BESTPUNKT";
     case AUTO_STATE_COMPLETE:                return "SIGNAL: OPTIMUM GEFUNDEN";
     case AUTO_STATE_FAILED:                  return autoFailReason;
     default:                                 return "INFO: ---";
@@ -2241,6 +2360,10 @@ const char* liveGetAzimuthStateText() {
       case AUTO_STATE_SIGNAL_OPT_EL_UP_WAIT:   return "Signal opt. Winkel +";
       case AUTO_STATE_SIGNAL_OPT_EL_DOWN_START:
       case AUTO_STATE_SIGNAL_OPT_EL_DOWN_WAIT: return "Signal opt. Winkel -";
+      case AUTO_STATE_SIGNAL_OPT_RETURN_AZ_START:
+      case AUTO_STATE_SIGNAL_OPT_RETURN_AZ_WAIT: return "Signal opt. Rueck AZ";
+      case AUTO_STATE_SIGNAL_OPT_RETURN_EL_START:
+      case AUTO_STATE_SIGNAL_OPT_RETURN_EL_WAIT: return "Signal opt. Rueck Winkel";
       case AUTO_STATE_COMPLETE:                return "optimiert";
       case AUTO_STATE_FAILED:                  return "fehler";
       default:                                 return "wartet";
