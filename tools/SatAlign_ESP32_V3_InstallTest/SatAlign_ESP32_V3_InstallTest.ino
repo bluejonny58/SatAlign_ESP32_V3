@@ -41,14 +41,32 @@
 // =====================================================
 
 // =====================================================
-// WLAN-Daten
+// WLAN-Daten / GitHub-sichere Secrets-Anbindung
 // =====================================================
-// Für die Erstinstallation werden dieselben Werte wie im Projekt verwendet.
-// Falls WLAN nicht erreichbar ist, laufen alle lokalen Tests trotzdem weiter.
-static const char* WIFI_SSID     = "GeniusHome";
-static const char* WIFI_PASSWORD = "63758058560720115296";
-static const char* WIFI_HOSTNAME = "sat-tracker-install";
-static const uint16_t WEB_PORT   = 80;
+// V3: In dieser InstallTest-Datei stehen bewusst KEINE echten WLAN- oder
+// OTA-Passwoerter mehr. Die Zugangsdaten kommen aus der lokalen secrets.h.
+//
+// Einsatz im Hauptprojekt:
+// - Wenn dieser Sketch im Projektordner liegt:           #include "secrets.h"
+// - Wenn dieser Sketch unter tools/... liegt:            #include "../../secrets.h"
+//
+// __has_include macht den Sketch in beiden Faellen verwendbar. Die Datei
+// secrets.h bleibt lokal und wird durch .gitignore nicht zu GitHub geladen.
+#if __has_include("../../secrets.h")
+  #include "../../secrets.h"
+#elif __has_include("secrets.h")
+  #include "secrets.h"
+#else
+  #error "secrets.h fehlt. Bitte secrets.example.h kopieren, in secrets.h umbenennen und lokale WLAN-/OTA-Daten eintragen."
+#endif
+
+// V3: Der InstallTest verwendet das erste bekannte WLAN aus WIFI_NETWORKS[].
+// Die vollstaendige Betriebssoftware kann mehrere WLANs nach Signalstaerke
+// auswaehlen; fuer den Hardware-InstallTest reicht ein definierter Zugang.
+static const char* INSTALL_WIFI_SSID     = WIFI_NETWORKS[0].ssid;
+static const char* INSTALL_WIFI_PASSWORD = WIFI_NETWORKS[0].password;
+static const char* INSTALL_WIFI_HOSTNAME = "sat-tracker-install";
+static const uint16_t WEB_PORT           = 80;
 
 // =====================================================
 // Pinbelegung aus dem Hauptprojekt
@@ -1524,8 +1542,8 @@ void setup() {
   Serial.println(mpuOk ? "OK" : "FEHLER");
 
   WiFi.mode(WIFI_STA);
-  WiFi.setHostname(WIFI_HOSTNAME);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  WiFi.setHostname(INSTALL_WIFI_HOSTNAME);
+  WiFi.begin(INSTALL_WIFI_SSID, INSTALL_WIFI_PASSWORD);
 
   unsigned long wifiStart = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - wifiStart < 5000) {
