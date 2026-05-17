@@ -118,18 +118,13 @@ void displayShowSplash();
 // Zeigt das Ergebnis des MPU6050-/GY-521-Boottests kurz auf dem TFT an.
 void displayShowMpuBootTestResult(bool ok, float relativeAngleDeg);
 
-// Zeigt einen dauerhaften Startfehler, wenn der MPU6050/GY-521 fehlt
-// oder nicht initialisiert werden konnte. Diese Anzeige wird bewusst nicht
-// automatisch verlassen: Die Anlage soll stromlos gemacht, der Sensor bzw.
-// die Verkabelung geprueft und danach neu gestartet werden.
-void displayShowMpuFatalError();
-
 // V3: Die frueheren Boot-EZ-Startanzeigen wurden entfernt.
-// Der Bootablauf springt nach erfolgreichem MPU-Test direkt ins Hauptmenue.
+// Der Bootablauf zeigt nach dem MPU-Test direkt den Sued-Hinweis.
 
-// Historischer Sued-/Ausrichtungshinweis.
-// Im aktuellen Bootablauf wird diese Anzeige nicht mehr automatisch gezeigt,
-// weil der fruehere Start-/EZ-Zwischenschritt ersatzlos entfallen ist.
+// Zeigt direkt nach erfolgreichem MPU-Test den Bedienhinweis fuer
+// die grobe Sued-/Mittenausrichtung.
+// Diese Anzeige wird vor WLAN/OTA/Webserver gezeigt, damit waehrend
+// einer moeglichen WLAN-Wartezeit keine Display-Reste stehen bleiben.
 void displayShowSouthAlignPrompt();
 
 // Zeichnet die obere Mode-Leiste.

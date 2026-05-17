@@ -1194,7 +1194,10 @@ static bool autoBeginAzDrive(AzimuthDirection dir, bool stepped, const char* rea
 static void autoStopAzDrive();
 static void autoStartCandidateHold(AutoState resumeState, const char* source);
 static bool autoServiceRfAndCandidate(AutoState resumeState);
+static bool autoServiceRfCandidateDuringCenter();
 static void autoServiceAzPosition();
+static void autoServiceAzPositionDuringCenter();
+static AzimuthDirection centerActiveDriveDirection();
 static bool autoReachedLimitForDir(AzimuthDirection dir);
 
 // =====================================================
@@ -1834,6 +1837,48 @@ static void autoServiceAzPosition() {
   }
 }
 
+static AzimuthDirection centerActiveDriveDirection() {
+  // V3_01: Die Mittenfahrt nutzt ihre eigene Zeitmessung und nicht die
+  // normale AUTO-AZ-Fahrt. Fuer RF-Kandidaten waehrend dieser Bewegung
+  // brauchen wir trotzdem eine ungefaehre AZPOS-Fortschreibung, damit ein
+  // mit MINUS verworfener Satellit beim Neustart nicht sofort erneut als
+  // Kandidat angenommen wird.
+  if (centerTimingState == CENTER_TIMING_RETURN_HALF) {
+    return centerReturnDir;
+  }
+
+  if (centerTimingState == CENTER_TIMING_LEAVE_ACTIVE ||
+      centerTimingState == CENTER_TIMING_SEARCH_ENTER ||
+      centerTimingState == CENTER_TIMING_CROSS_EXIT) {
+    return centerTimingDir;
+  }
+
+  return AZ_DIR_NONE;
+}
+
+static void autoServiceAzPositionDuringCenter() {
+  // V3_01: AUTO beobachtet jetzt auch waehrend der Mittenfahrt das RF-Signal.
+  // Da diese Fahrt nicht ueber autoBeginAzDrive() laeuft, wird AZPOS hier
+  // separat ueber dieselben Pseudo-Schritte wie bei der normalen Grobsuche
+  // mitgefuehrt. Es ist keine Encoder-Position, aber fuer die Sperrlogik von
+  // falschen Satelliten ausreichend und besser als dauerhaft AZPOS=0.
+  if (centerOwner != CENTER_OWNER_AUTO) return;
+
+  const AzimuthDirection dir = centerActiveDriveDirection();
+  if (dir == AZ_DIR_NONE) return;
+
+  const unsigned long now = millis();
+  if (autoLastPseudoStepAtMs == 0) {
+    autoLastPseudoStepAtMs = now;
+    return;
+  }
+
+  while (now - autoLastPseudoStepAtMs >= AUTO_CONTINUOUS_PSEUDO_STEP_MS) {
+    autoLastPseudoStepAtMs += AUTO_CONTINUOUS_PSEUDO_STEP_MS;
+    applyAzStepFromDir(dir);
+  }
+}
+
 static void autoStartCandidateHold(AutoState resumeState, const char* source) {
   autoStopAzDrive();
 
@@ -1878,6 +1923,76 @@ static bool autoServiceRfAndCandidate(AutoState resumeState) {
   }
 
   return false;
+}
+
+static bool autoServiceRfCandidateDuringCenter() {
+  // V3_01: Sonderfall waehrend der AUTO-Mittenfahrt.
+  // Wenn die Antenne beim Ausrichten nach Sueden zufaellig bereits durch einen
+  // verwertbaren Satelliten laeuft, soll dieser Punkt sofort als Kandidat
+  // angezeigt werden. PLUS beendet dann die Suche erfolgreich. MINUS startet
+  // den Suchablauf bewusst komplett neu: zuerst wieder Mittenfahrt, danach
+  // normaler Ost-/West-Suchlauf.
+  if (centerOwner != CENTER_OWNER_AUTO) return false;
+
+  rfUpdate();
+  autoRfCurrentAdc = rfGetFilteredAdc();
+
+  // Bei der Mittenfahrt gibt es vorab keine dynamische AUTO-Zero-Phase wie
+  // bei der Grobsuche. Darum wird hier die RF-Baseline aus rf_detector.cpp
+  // verwendet. Positiver DROP bedeutet im aktuellen AD8317-Aufbau: Signal wird
+  // staerker, weil der ADC-Wert sinkt.
+  autoRfDropAdc = rfGetDropAdc();
+  if (autoRfDropAdc < 0.0f) autoRfDropAdc = 0.0f;
+
+  autoRfZeroAdc = autoRfCurrentAdc + autoRfDropAdc;
+  if (autoRfBestAdc <= 0.0f || autoRfCurrentAdc < autoRfBestAdc) {
+    autoRfBestAdc = autoRfCurrentAdc;
+    autoBestVoltage = rfGetPinVoltage();
+  }
+
+  if (millis() - autoLastRfDiagMs >= AUTO_RF_DIAG_INTERVAL_MS) {
+    autoLastRfDiagMs = millis();
+    Serial.print("AUTO RF MITTE | ADC=");
+    Serial.print(autoRfCurrentAdc, 1);
+    Serial.print(" | DROP=");
+    Serial.print(autoRfDropAdc, 1);
+    Serial.print(" | AZPOS=");
+    Serial.println(azPositionSteps);
+  }
+
+  // Ein bereits mit MINUS verworfener Bereich wird auch waehrend einer neu
+  // gestarteten Mittenfahrt ignoriert. Dadurch fuehrt MINUS nicht in eine
+  // Endlosschleife am selben falschen Satelliten.
+  if (isBlockedAzPosition(azPositionSteps)) {
+    return false;
+  }
+
+  if (autoRfDropAdc < AUTO_RF_CANDIDATE_DROP_ADC) {
+    return false;
+  }
+
+  // Die Center-Zeitmessung muss vor dem Kandidaten-Hold wirklich beendet
+  // werden. Sonst wuerde updateCenterMode() trotz Kandidatenanzeige weiter
+  // laufen, weil centerHomingStarted noch aktiv waere.
+  centerAzStopOnly();
+  azimuthStop();
+  centerHomingStarted = false;
+  centerTimingState = CENTER_TIMING_IDLE;
+  centerTimingDir = AZ_DIR_NONE;
+  centerReturnDir = AZ_DIR_NONE;
+  centerStateStartedAtMs = 0;
+  centerEntryAtMs = 0;
+  centerZoneWidthMs = 0;
+  centerReturnMs = 0;
+  centerSearchReverseCount = 0;
+  centerOwner = CENTER_OWNER_MENU;
+
+  // Wichtig: Bei MINUS soll der komplette Suchablauf neu starten und nicht
+  // nur die aktuelle Teilfahrt fortsetzen. Darum ist der Resume-Zustand hier
+  // AUTO_STATE_NEW_CENTER_START.
+  autoStartCandidateHold(AUTO_STATE_NEW_CENTER_START, "CENTER_RF");
+  Serial.println("AUTO V3_01: RF-Kandidat waehrend Mittenfahrt erkannt. PLUS=OK, MINUS=Suche neu starten.");
+  return true;
 }
 
 static void autoStartCenterForNextState(AutoState nextState) {
@@ -2295,7 +2410,7 @@ static const char* autoInfoText() {
     case AUTO_STATE_SIGNAL_OPT_RETURN_AZ_WAIT: return "SIGNAL: RUECKFAHRT AZ BESTPUNKT";
     case AUTO_STATE_SIGNAL_OPT_RETURN_EL_START:
     case AUTO_STATE_SIGNAL_OPT_RETURN_EL_WAIT: return "SIGNAL: RUECKFAHRT WINKEL BESTPUNKT";
-    case AUTO_STATE_COMPLETE:                return "SATELLIT BESTAETIGT";
+    case AUTO_STATE_COMPLETE:                return "ASTRA 19.2 GEFUNDEN";
     case AUTO_STATE_FAILED:                  return autoFailReason;
     default:                                 return "INFO: ---";
   }
@@ -2369,7 +2484,7 @@ const char* liveGetAzimuthStateText() {
       case AUTO_STATE_SIGNAL_OPT_RETURN_AZ_WAIT: return "Signal opt. Rueck AZ";
       case AUTO_STATE_SIGNAL_OPT_RETURN_EL_START:
       case AUTO_STATE_SIGNAL_OPT_RETURN_EL_WAIT: return "Signal opt. Rueck Winkel";
-      case AUTO_STATE_COMPLETE:                return "bestaetigt";
+      case AUTO_STATE_COMPLETE:                return "Astra gefunden";
       case AUTO_STATE_FAILED:                  return "fehler";
       default:                                 return "wartet";
     }
@@ -2415,7 +2530,7 @@ const char* liveGetElevationStateText() {
       case AUTO_STATE_SIGNAL_OPT_EL_UP_WAIT:   return "winkel hoch";
       case AUTO_STATE_SIGNAL_OPT_EL_DOWN_START:
       case AUTO_STATE_SIGNAL_OPT_EL_DOWN_WAIT: return "winkel runter";
-      case AUTO_STATE_COMPLETE:                return "bestaetigt";
+      case AUTO_STATE_COMPLETE:                return "Astra gefunden";
       case AUTO_STATE_FAILED:                  return "auto fehler";
       default:                                 return "auto aktiv";
     }
@@ -2476,6 +2591,16 @@ const char* liveGetInfoText() {
       snprintf(infoBuf, sizeof(infoBuf),
                "SAT: +OK -FALSCH");
       return infoBuf;
+    }
+
+    // V3_01: Abschlussfenster nach PLUS/OK.
+    // Sobald der Nutzer einen Kandidaten mit PLUS bestaetigt, bleibt AUTO im
+    // sicheren Endzustand stehen. Das TFT bekommt einen eindeutigen Marker,
+    // damit statt der normalen Livewerte ein klares Vollbild angezeigt wird:
+    // Astra gefunden, Geraet darf stromlos gemacht werden, MODE lang zurueck
+    // ins Hauptmenue. MODE kurz bleibt absichtlich ohne Funktion.
+    if (autoState == AUTO_STATE_COMPLETE) {
+      return "SAT_FOUND|ASTRA=19.2";
     }
 
 
@@ -3449,6 +3574,10 @@ static void startCenterHomingFromAuto() {
   centerSearchReverseCount = 0;
   centerLastFailText = "";
 
+  // V3_01: Fuer die neue RF-Auswertung waehrend der Mittenfahrt wird die
+  // ungefaehre AZPOS ab Beginn der Centerfahrt separat mitgefuehrt.
+  autoLastPseudoStepAtMs = millis();
+
   Serial.println("AUTO V3: Mittenfunktion gestartet. Erste Suchrichtung = EAST / OSTEN");
   Serial.print("AUTO V3: Hall C/E/W = ");
   Serial.print(centerHallCenter() ? 1 : 0);
@@ -3912,7 +4041,11 @@ static void processButtonLogic() {
         autoState = (autoResumeAfterCandidateState == AUTO_STATE_INACTIVE)
                     ? AUTO_STATE_NEW_SCAN_EAST_START
                     : autoResumeAfterCandidateState;
-        Serial.println("AUTO V3: Kandidat als falsch markiert, Suche wird fortgesetzt.");
+        if (autoState == AUTO_STATE_NEW_CENTER_START) {
+          Serial.println("AUTO V3_01: Center-Kandidat als falsch markiert, Suche startet komplett neu.");
+        } else {
+          Serial.println("AUTO V3: Kandidat als falsch markiert, Suche wird fortgesetzt.");
+        }
         return;
       }
     }
@@ -4069,6 +4202,18 @@ static void updateCenterMode() {
   }
 
   const unsigned long now = millis();
+
+  // V3_01: Waehrend der AUTO-Mittenfahrt wird das RF-Signal jetzt bereits
+  // ausgewertet. Wenn ein verwertbarer Satellit gefunden wird, stoppt die
+  // Mittenfahrt sofort und der normale Kandidatenmodus erscheint.
+  // PLUS bestaetigt den Satelliten. MINUS verwirft ihn und startet den
+  // kompletten Suchablauf wieder bei der Mittenfahrt.
+  if (centerOwner == CENTER_OWNER_AUTO) {
+    autoServiceAzPositionDuringCenter();
+    if (autoServiceRfCandidateDuringCenter()) {
+      return;
+    }
+  }
 
   switch (centerTimingState) {
     case CENTER_TIMING_LEAVE_ACTIVE:

@@ -310,9 +310,9 @@ void displayShowSplash() {
 
 // Zeigt das Ergebnis des GY-521-/MPU6050-Boottests.
 //
-// Diese Anzeige ist bewusst nur noch fuer den erfolgreichen Sensorstart
-// gedacht. Bei einem Fehler wird danach displayShowMpuFatalError() aufgerufen
-// und der Bootvorgang im Hauptsketch dauerhaft angehalten.
+// Diese Anzeige ist bewusst einfach gehalten:
+// - OK: Sensor gefunden und relative Elevation sichtbar
+// - FEHLER: AUTO darf ohne MPU nicht als sicher gelten
 void displayShowMpuBootTestResult(bool ok, float relativeAngleDeg) {
   tft.fillScreen(C_BG);
 
@@ -325,56 +325,33 @@ void displayShowMpuBootTestResult(bool ok, float relativeAngleDeg) {
     writeText(10, 76, C_IDLE, C_BG, 1, "GY-521 bereit");
   } else {
     writeText(10, 18, C_WARN, C_BG, 2, "MPU FEHLT");
-    writeText(10, 52, C_TEXT, C_BG, 1, "Start gesperrt");
-    writeText(10, 76, C_IDLE, C_BG, 1, "Initialisierung fehlgeschlagen");
+    writeText(10, 52, C_TEXT, C_BG, 1, "Suche gesperrt");
+    writeText(10, 76, C_IDLE, C_BG, 1, "GY-521 pruefen");
   }
 
   delay(900);
 
   // Auch nach dem MPU-Test keine Live-Rahmen vorzeichnen.
-  // Der naechste Bildschirm soll den kompletten Inhalt selbst aufbauen.
-  // Das verhindert alte Text-/Rahmenreste waehrend des Boot-Ablaufs.
+  // Der naechste Bildschirm (Sued-Hinweis oder Hauptmenue) soll den
+  // kompletten Inhalt selbst aufbauen. Das verhindert alte Text-/Rahmenreste
+  // waehrend des Boot-Ablaufs.
   tft.fillScreen(C_BG);
   firstRender = true;
 }
 
-// Dauerhafte Fehleranzeige fuer einen fehlenden oder nicht initialisierbaren
-// MPU6050/GY-521.
-//
+
+// Zeigt den Hinweis fuer die grobe Sued-/Mittenausrichtung.
+// Diese Anzeige ist bewusst ein Vollbild-Hinweis und wird vor dem
+// WLAN/OTA-Start gezeigt, damit bei einer WLAN-Wartezeit keine alten
+// Grafikreste sichtbar bleiben.
+
+// Zeigt die automatische Boot-Anfahrt auf die Standard-Elevation.
 // Kommentarstand: V3
 //
-// Sicherheitsentscheidung:
-// Ohne MPU gibt es keinen verlaesslichen Elevationswinkel. Deshalb wird nicht
-// nur AUTO gesperrt, sondern der Start komplett angehalten. Der Bedienhinweis
-// fordert dazu auf, die Anlage stromlos zu machen, Sensor/Verkabelung zu
-// pruefen und anschliessend sauber neu zu starten.
-void displayShowMpuFatalError() {
-  tft.fillScreen(C_WARN_BG);
+// Diese Anzeige ist bewusst ein eigener Vollbildschirm und kein normaler
+// V3: Die frueheren Boot-EZ-Startanzeigen wurden entfernt.
+// Info-/Sued-Hinweis und Hauptmenue sind die einzigen Boot-Anzeigen.
 
-  tft.fillRect(0, 0, SCREEN_W, 24, C_WARN);
-  writeText(8, 5, C_TEXT, C_WARN, 2, "MPU FEHLT");
-
-  writeText(8, 34, C_WARN_YEL, C_WARN_BG, 1, "GY-521 / MPU6050");
-  writeText(8, 50, C_TEXT, C_WARN_BG, 1, "nicht erkannt oder");
-  writeText(8, 64, C_TEXT, C_WARN_BG, 1, "nicht initialisiert.");
-
-  writeText(8, 86, C_TEXT, C_WARN_BG, 1, "Alle Motoren STOP.");
-  writeText(8, 102, C_IDLE, C_WARN_BG, 1, "Strom AUS, Sensor");
-  writeText(8, 116, C_IDLE, C_WARN_BG, 1, "pruefen, neu starten.");
-
-  firstRender = true;
-  lastWasSpecialScreen = true;
-}
-
-
-// Historischer Hinweis fuer die grobe Sued-/Mittenausrichtung.
-//
-// Kommentarstand: V3
-//
-// Der aktuelle Bootablauf ruft diese Anzeige nicht mehr automatisch auf.
-// Grund: Der Nutzer wollte den frueheren 10-s-EZ-Start/Zwischenschritt
-// ersatzlos entfernen. Nach erfolgreichem MPU-Test erscheint deshalb direkt
-// das Hauptmenue; die Funktion bleibt nur als kompatible Hilfsanzeige erhalten.
 void displayShowSouthAlignPrompt() {
   tft.fillScreen(C_BG);
   writeText(8, 8, C_SEARCH, C_BG, 2, "AUSRICHTEN");
@@ -666,6 +643,42 @@ static void drawInfoIpScreen(const char* infoText) {
   writeText(8, 123, C_TEXT, C_BG, 1, "MODE OK | lang Menue");
 }
 
+
+static void drawSatelliteFoundScreen(const char* infoText) {
+  // V3_01: Kompaktes Abschlussfenster nach PLUS-Bestaetigung.
+  // Die erste Fassung war auf dem 128x128-TFT zu hoch aufgebaut; dadurch war
+  // der wichtigste Bedienhinweis "MODE lang = Menue" unten abgeschnitten.
+  // Diese Version nutzt kuerzere Texte und kleinere Abstaende, damit alle
+  // Informationen sicher sichtbar bleiben:
+  // - Astra 19,2 wurde bestaetigt
+  // - das Geraet darf stromlos gemacht werden
+  // - MODE lang fuehrt zurueck ins Hauptmenue
+  (void)infoText;
+
+  tft.fillScreen(C_BG);
+
+  // Gruener Kopfbereich: klare Erfolgsmeldung, aber nur 20 px hoch, damit
+  // darunter genuegend Platz fuer die Bedienhinweise bleibt.
+  tft.fillRect(0, 0, SCREEN_W, 20, C_SIGNAL_OK);
+  writeText(8, 3, C_BG, C_SIGNAL_OK, 2, "GEFUNDEN");
+
+  // Kompakte blaue Infobox fuer den bestaetigten Satelliten.
+  tft.fillRoundRect(7, 28, SCREEN_W - 14, 32, 5, C_MENU_BLUE);
+  tft.drawRoundRect(7, 28, SCREEN_W - 14, 32, 5, C_TEXT);
+  tft.drawRoundRect(8, 29, SCREEN_W - 16, 30, 5, C_TEXT);
+  writeText(14, 36, C_TEXT, C_MENU_BLUE, 1, "Astra 19,2 OK");
+
+  // Kurze, zweizeilige Handlungsanweisung: Empfang ist bestaetigt, die Anlage
+  // muss nicht weiter laufen und kann stromlos gemacht werden.
+  writeText(8, 72, C_TEXT, C_BG, 1, "Geraet kann jetzt");
+  writeText(8, 86, C_TEXT, C_BG, 1, "stromlos werden.");
+
+  // Wichtigster Bedienhinweis bewusst oberhalb der unteren Displaykante.
+  // Auf dem ST7735 128x128 waere Y=126 nicht mehr voll sichtbar.
+  tft.drawFastHLine(6, 106, SCREEN_W - 12, C_BORDER);
+  writeText(8, 112, C_IDLE, C_BG, 1, "MODE lang = Menue");
+}
+
 static void drawAutoSetupScreen(const char* infoText) {
   tft.fillScreen(C_BG);
 
@@ -933,6 +946,21 @@ void displayRender(const DisplayData& data) {
   if (currentInfoText.indexOf("AUTO_SETUP|") == 0) {
     if (firstRender || currentInfoText != lastMenuInfoText || data.mode != lastData.mode) {
       drawAutoSetupScreen(data.infoText);
+      lastMenuInfoText = currentInfoText;
+    }
+    lastData = data;
+    firstRender = false;
+    lastWasSpecialScreen = true;
+    return;
+  }
+
+  if (currentInfoText.indexOf("SAT_FOUND|") == 0) {
+    // V3_01: Eigenes Abschlussfenster nach PLUS/OK im Kandidatenmodus.
+    // Der Bildschirm wird nur bei Eintritt bzw. echtem Markerwechsel neu
+    // aufgebaut. So bleibt die Meldung ruhig stehen, bis der Nutzer das
+    // Geraet stromlos macht oder per MODE lang ins Hauptmenue zurueckgeht.
+    if (firstRender || currentInfoText != lastMenuInfoText || data.mode != lastData.mode) {
+      drawSatelliteFoundScreen(data.infoText);
       lastMenuInfoText = currentInfoText;
     }
     lastData = data;

@@ -378,43 +378,20 @@ void setup() {
   // der Sensor gefunden, kalibriert und plausibel eingelesen wurde.
   initLiveRuntime();
 
-  // Ergebnis des GY-521-Starttests auswerten.
-  // Kommentarstand: V3
-  //
-  // Sicherheitsentscheidung:
-  // Wenn der MPU6050/GY-521 fehlt oder nicht initialisiert werden konnte, wird
-  // der Bootvorgang hier bewusst angehalten. Ohne sicheren Elevationswinkel
-  // darf weder Suche noch manuelle Bewegung als normaler Betriebszustand
-  // freigegeben werden. Beide Motorachsen werden gestoppt, das TFT zeigt einen
-  // dauerhaften Fehlerhinweis. Danach soll die Anlage stromlos gemacht, die
-  // Sensor-/I2C-Verkabelung geprueft und der ESP32 neu gestartet werden.
-  if (!liveMpuReady()) {
-    azimuthStop();
-    elevationStop();
-
-#if DEBUG_BOOT
-    Serial.println("START GESPERRT: MPU6050/GY-521 fehlt oder konnte nicht initialisiert werden.");
-    Serial.println("Anlage stromlos machen, Sensor/I2C pruefen und danach neu starten.");
-#endif
-
-    displayShowMpuFatalError();
-
-    while (true) {
-      // Keine WLAN-/OTA-/Webserver-Initialisierung und keine Runtime.
-      // Der Fehler ist absichtlich nur durch Strom AUS/EIN bzw. Reset nach
-      // behobener Ursache zu verlassen.
-      delay(1000);
-    }
-  }
-
-  // Erfolgreicher MPU-Start: kurze OK-Anzeige, dann direkt ins Hauptmenue.
-  displayShowMpuBootTestResult(true, liveGetRelativeAngleDeg());
+  // Ergebnis des GY-521-Starttests 3 Sekunden auf dem TFT anzeigen.
+  // Wichtig: AUTO/Satellitensuche bleibt bei Fehler dauerhaft gesperrt.
+  displayShowMpuBootTestResult(liveMpuReady(), liveGetRelativeAngleDeg());
 
   // V3: Der fruehere 10-s-EZ-Startbildschirm wurde ersatzlos entfernt.
-  // Es gibt keine eigene Boot-EZ-Startphase mehr. Die Elevation kann weiterhin
-  // bewusst in den Menues Ausrichten, Suchen oder Manuell EZ korrigiert werden.
+  // Nach dem MPU-Test wird nur noch der bekannte Sued-Hinweis angezeigt.
+  // Die Elevation kann weiterhin in den Menues Ausrichten/Suche/Manuell
+  // bewusst korrigiert werden; beim Boot wird keine eigene EZ-Startphase mehr
+  // eingeblendet.
+  if (liveMpuReady()) {
+    displayShowSouthAlignPrompt();
+  }
 
-  // Nach dem MPU-Test wird das echte Hauptmenue angezeigt.
+  // Nach dem Hinweis wird das echte Hauptmenue angezeigt.
   // Wichtig: Dabei wird NICHT automatisch in MANUELL gewechselt und
   // keine Automatik startet von allein.
   liveCommandOpenMainMenu();
