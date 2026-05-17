@@ -481,21 +481,6 @@ namespace {
   float autoRfBestAdc = 4095.0f;
   float autoRfCurrentAdc = 0.0f;
   float autoRfDropAdc = 0.0f;
-
-  // V3: RF-Ueberwachung waehrend der AUTO-Mittenfahrt.
-  // Hintergrund:
-  // Beim groben Ausrichten nach Sueden kann die Antenne bereits waehrend
-  // der Center-/Mittenfahrt zufaellig auf Astra 19,2 oder einen anderen
-  // starken Satelliten zeigen. Frueher wurde RF in dieser Phase zwar
-  // angezeigt, aber nicht als Kandidat ausgewertet.
-  //
-  // Diese Merker erlauben eine stabile 3-fach-Bestaetigung, bevor die
-  // Mittenfahrt abgebrochen und in den normalen Kandidatenmodus gewechselt
-  // wird. Dadurch stoppt AUTO nicht wegen eines einzelnen ADC-Ausreissers.
-  uint8_t centerMoveRfGoodCount = 0;
-  unsigned long centerMoveRfNextCheckAtMs = 0;
-  unsigned long centerMoveLastPseudoStepAtMs = 0;
-
   float autoCandidateAdc = 0.0f;
   int autoCycleIndex = 0;
 
@@ -1209,8 +1194,6 @@ static bool autoBeginAzDrive(AzimuthDirection dir, bool stepped, const char* rea
 static void autoStopAzDrive();
 static void autoStartCandidateHold(AutoState resumeState, const char* source);
 static bool autoServiceRfAndCandidate(AutoState resumeState);
-static bool autoServiceCenterMoveRfCandidate();
-static void autoResetCenterMoveRfWatch();
 static void autoServiceAzPosition();
 static bool autoReachedLimitForDir(AzimuthDirection dir);
 
@@ -1252,9 +1235,6 @@ static void resetAutoState() {
   autoRfBestAdc = 4095.0f;
   autoRfCurrentAdc = 0.0f;
   autoRfDropAdc = 0.0f;
-  centerMoveRfGoodCount = 0;
-  centerMoveRfNextCheckAtMs = 0;
-  centerMoveLastPseudoStepAtMs = 0;
   autoCandidateAdc = 0.0f;
   autoCycleIndex = 0;
 
@@ -1898,150 +1878,6 @@ static bool autoServiceRfAndCandidate(AutoState resumeState) {
   }
 
   return false;
-}
-
-static void autoResetCenterMoveRfWatch() {
-  // V3: Reset fuer die neue RF-Ueberwachung waehrend AUTO-Mitte.
-  // Wird bei jedem Start der AUTO-Mittenfahrt gesetzt, damit alte
-  // Bestaetigungszaehler oder Zeitstempel keinen neuen Lauf beeinflussen.
-  centerMoveRfGoodCount = 0;
-  centerMoveRfNextCheckAtMs = 0;
-  centerMoveLastPseudoStepAtMs = millis();
-}
-
-static AzimuthDirection centerActiveDriveDirForRfWatch() {
-  // Liefert die aktuell fahrende Richtung der Center-Zeitmessung.
-  // Die Mitte benutzt nicht autoDriveDir, sondern eigene Center-Richtungen.
-  // Fuer Kandidatenposition und BADSAT-Sperrbereich muessen wir die
-  // ungefaehre AZPOS deshalb hier separat in Pseudo-Schritten nachfuehren.
-  switch (centerTimingState) {
-    case CENTER_TIMING_LEAVE_ACTIVE:
-    case CENTER_TIMING_SEARCH_ENTER:
-    case CENTER_TIMING_CROSS_EXIT:
-      return centerTimingDir;
-
-    case CENTER_TIMING_RETURN_HALF:
-      return centerReturnDir;
-
-    default:
-      return AZ_DIR_NONE;
-  }
-}
-
-static void autoServiceCenterMovePseudoPosition(AzimuthDirection dir, unsigned long now) {
-  // V3: Die AUTO-Suche fuehrt AZPOS bei Dauerfahrten in Pseudo-Schritten.
-  // Die Center-Routine faehrt AZ jedoch ueber ihre eigene getestete
-  // Zeitmessung. Damit MINUS auch fuer einen waehrend der Mittenfahrt
-  // gefundenen Kandidaten einen plausiblen Bereich sperren kann, zaehlen wir
-  // dieselbe Pseudo-Positionierung hier mit.
-  if (dir == AZ_DIR_NONE) {
-    centerMoveLastPseudoStepAtMs = now;
-    return;
-  }
-
-  if (centerMoveLastPseudoStepAtMs == 0) {
-    centerMoveLastPseudoStepAtMs = now;
-  }
-
-  while (now - centerMoveLastPseudoStepAtMs >= AUTO_CONTINUOUS_PSEUDO_STEP_MS) {
-    centerMoveLastPseudoStepAtMs += AUTO_CONTINUOUS_PSEUDO_STEP_MS;
-    applyAzStepFromDir(dir);
-  }
-}
-
-static bool autoServiceCenterMoveRfCandidate() {
-  // V3: Variante C fuer den realen Praxisfall:
-  // Wenn waehrend der AUTO-Mittenfahrt bereits ein gutes Signal anliegt,
-  // soll die Anlage NICHT erst weiter zur mechanischen Mitte fahren.
-  // Stattdessen wird sofort gestoppt und der bestehende Kandidatenmodus
-  // verwendet:
-  //   PLUS  -> Nutzer bestaetigt Empfang, AUTO ist fertig.
-  //   MINUS -> Bereich wird als falscher Kandidat gespeichert, danach
-  //            startet die Mittenfahrt erneut.
-  //
-  // Diese Logik gilt bewusst nur fuer AUTO. Der Menuepunkt "Ausrichten/Mitte"
-  // bleibt eine reine mechanische Center-Zeitmessung ohne RF-Abbruch.
-  if (!isAutoMode() || centerOwner != CENTER_OWNER_AUTO || !centerHomingStarted) {
-    return false;
-  }
-
-  const unsigned long now = millis();
-  const AzimuthDirection activeDir = centerActiveDriveDirForRfWatch();
-  autoServiceCenterMovePseudoPosition(activeDir, now);
-
-  // RF nicht in jedem Loop voll auswerten, sondern im selben stabilen Takt
-  // wie die Kandidatenbestaetigung. Dadurch wird der Filter ruhiger und ein
-  // einzelner Peak/ADC-Ausreisser stoppt die Mittenfahrt nicht sofort.
-  if (now < centerMoveRfNextCheckAtMs) {
-    return false;
-  }
-  centerMoveRfNextCheckAtMs = now + AUTO_CANDIDATE_CONFIRM_INTERVAL_MS;
-
-  rfUpdate();
-
-  autoRfCurrentAdc = rfGetFilteredAdc();
-  autoRfDropAdc = rfGetDropAdc();
-  if (autoRfDropAdc < 0.0f) autoRfDropAdc = 0.0f;
-
-  if (autoRfCurrentAdc < autoRfBestAdc) {
-    autoRfBestAdc = autoRfCurrentAdc;
-    autoBestVoltage = rfGetPinVoltage();
-  }
-
-  // Fuer diesen Sonderfall wird bewusst strenger geprueft als bei der
-  // normalen Grobsuche: Die Mittenfahrt wird erst ab "gutem" TV-ADC-Wert
-  // und gleichzeitig plausibler DROP-Verbesserung abgebrochen.
-  // RF_TV_GOOD_MAX_ADC kommt aus den Aussentests; kleinerer ADC = besseres Signal.
-  const bool goodEnoughForCenterAbort =
-      (autoRfCurrentAdc > 0.0f) &&
-      (autoRfCurrentAdc <= RF_TV_GOOD_MAX_ADC) &&
-      (autoRfDropAdc >= AUTO_RF_CANDIDATE_DROP_ADC);
-
-  // Wenn der Bereich nach einem frueheren MINUS bereits gesperrt wurde,
-  // darf derselbe Peak die Mittenfahrt nicht sofort wieder abbrechen.
-  // Die RF-Werte werden trotzdem gelesen, damit Display/Web weiter aktuelle
-  // Diagnosewerte anzeigen koennen.
-  if (goodEnoughForCenterAbort && !isBlockedAzPosition(azPositionSteps)) {
-    centerMoveRfGoodCount++;
-  } else {
-    centerMoveRfGoodCount = 0;
-  }
-
-  if (centerMoveRfGoodCount < AUTO_CANDIDATE_CONFIRM_COUNT) {
-    return false;
-  }
-
-  // Ab hier ist das Signal stabil genug: Motor sofort stoppen, die noch
-  // nicht abgeschlossene Mittenfahrt sauber deaktivieren und in den normalen
-  // Kandidatenmodus springen. Wichtig: Resume-State ist wieder
-  // AUTO_STATE_NEW_CENTER_START. Wird der Kandidat mit MINUS verworfen,
-  // speichert die vorhandene BADSAT-Logik den Bereich und AUTO startet danach
-  // die Mittenfahrt neu.
-  centerAzStopOnly();
-  azimuthStop();
-  centerHomingStarted = false;
-  centerTimingState = CENTER_TIMING_IDLE;
-  centerTimingDir = AZ_DIR_NONE;
-  centerReturnDir = AZ_DIR_NONE;
-  centerStateStartedAtMs = 0;
-  centerEntryAtMs = 0;
-  centerZoneWidthMs = 0;
-  centerReturnMs = 0;
-  centerSearchReverseCount = 0;
-  centerOwner = CENTER_OWNER_MENU;
-  centerSuccessNoticeActive = false;
-  centerLastFailText = "";
-
-  Serial.print("AUTO V3: gutes Signal waehrend Mittenfahrt erkannt | ADC=");
-  Serial.print(autoRfCurrentAdc, 1);
-  Serial.print(" | DROP_ADC=");
-  Serial.print(autoRfDropAdc, 1);
-  Serial.print(" | AZPOS=");
-  Serial.println(azPositionSteps);
-
-  autoStartCandidateHold(AUTO_STATE_NEW_CENTER_START, "CENTER_MOVE_RF");
-  autoResetCenterMoveRfWatch();
-  return true;
 }
 
 static void autoStartCenterForNextState(AutoState nextState) {
@@ -3613,11 +3449,6 @@ static void startCenterHomingFromAuto() {
   centerSearchReverseCount = 0;
   centerLastFailText = "";
 
-  // V3: Ab hier wird waehrend der AUTO-Mittenfahrt RF mitbewertet.
-  // Ein bereits gutes Signal darf die Mittenfahrt abbrechen und als
-  // normaler Kandidat mit PLUS/MINUS behandelt werden.
-  autoResetCenterMoveRfWatch();
-
   Serial.println("AUTO V3: Mittenfunktion gestartet. Erste Suchrichtung = EAST / OSTEN");
   Serial.print("AUTO V3: Hall C/E/W = ");
   Serial.print(centerHallCenter() ? 1 : 0);
@@ -4238,14 +4069,6 @@ static void updateCenterMode() {
   }
 
   const unsigned long now = millis();
-
-  // V3: Im AUTO-Betrieb RF bereits waehrend der Mittenfahrt auswerten.
-  // Wird ein stabiles gutes Signal gefunden, stoppt diese Funktion die
-  // Mittenfahrt und schaltet in den normalen Kandidatenmodus. Dann darf die
-  // restliche Center-Zustandsmaschine in diesem Loop nicht weiterlaufen.
-  if (autoServiceCenterMoveRfCandidate()) {
-    return;
-  }
 
   switch (centerTimingState) {
     case CENTER_TIMING_LEAVE_ACTIVE:
