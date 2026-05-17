@@ -118,39 +118,18 @@ void displayShowSplash();
 // Zeigt das Ergebnis des MPU6050-/GY-521-Boottests kurz auf dem TFT an.
 void displayShowMpuBootTestResult(bool ok, float relativeAngleDeg);
 
-// Zeigt die automatische Boot-Anfahrt auf die zentrale Standard-EZ.
-// Kommentarstand: V3
-//
-// Diese Anzeige erscheint bewusst noch vor dem Hauptmenue. Dadurch sieht man
-// direkt am Geraet, dass die Elevation zuerst auf den definierten Sollwert
-// gefahren wird und die normale Bedienung erst danach beginnt.
-//
-// Der optionale remainingSeconds-Wert zeigt bei der Boot-Anfahrt einen
-// Countdown an. Das ist fuer den Live-Test wichtig: Der User erkennt sofort,
-// dass der Sketch arbeitet und wann die Sicherheitszeit endet.
-//
-// Hinweis V3:
-// Die Funktion ist absichtlich generisch gehalten. Die Logik entscheidet
-// ausserhalb dieser Display-Datei, ob gerade stabilisiert, gefahren, nachgeprueft
-// oder ein Timeout-Hinweis angezeigt wird. display_ui.cpp bleibt dadurch reine Anzeige
-// und enthaelt keine Motor-/Sensorentscheidung.
-void displayShowBootElevationTarget(float currentDeg, float targetDeg, bool moving, bool done, bool timeout, long remainingSeconds = -1);
+// Zeigt einen dauerhaften Startfehler, wenn der MPU6050/GY-521 fehlt
+// oder nicht initialisiert werden konnte. Diese Anzeige wird bewusst nicht
+// automatisch verlassen: Die Anlage soll stromlos gemacht, der Sensor bzw.
+// die Verkabelung geprueft und danach neu gestartet werden.
+void displayShowMpuFatalError();
 
-// Zeigt die manuelle Elevations-Startphase vor dem Hauptmenue.
-// Kommentarstand: V3
-//
-// Diese Anzeige ersetzt den frueheren automatischen EZ-Start mit Timeout.
-// Der Nutzer kann die Elevation direkt am Geraet grob einstellen und mit MODE
-// ins Hauptmenue wechseln. Die Funktion ist reine Anzeige; die Tasten- und
-// Motorlogik liegt im Hauptsketch.
-// remainingSeconds zeigt das 15-s-Bedienfenster der Startphase an.
-// Kommentarstand: V3
-void displayShowManualElevationStart(float currentDeg, float recommendedDeg, bool upPressed, bool downPressed, long remainingSeconds = -1);
+// V3: Die frueheren Boot-EZ-Startanzeigen wurden entfernt.
+// Der Bootablauf springt nach erfolgreichem MPU-Test direkt ins Hauptmenue.
 
-// Zeigt direkt nach erfolgreichem MPU-Test den Bedienhinweis fuer
-// die grobe Sued-/Mittenausrichtung.
-// Diese Anzeige wird vor WLAN/OTA/Webserver gezeigt, damit waehrend
-// einer moeglichen WLAN-Wartezeit keine Display-Reste stehen bleiben.
+// Historischer Sued-/Ausrichtungshinweis.
+// Im aktuellen Bootablauf wird diese Anzeige nicht mehr automatisch gezeigt,
+// weil der fruehere Start-/EZ-Zwischenschritt ersatzlos entfallen ist.
 void displayShowSouthAlignPrompt();
 
 // Zeichnet die obere Mode-Leiste.

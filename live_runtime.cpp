@@ -92,9 +92,15 @@ namespace {
   MainMenuSelection mainMenuSelection = MENU_ITEM_CENTER;
 
   // V3: Separater TFT-Infobildschirm aus dem Hauptmenue.
-  // Er zeigt bewusst nur lokale Diagnosedaten wie IP-Adresse und WLAN-Status
-  // und startet keine Motor-, Such- oder Netzwerkaktion.
+  // Er zeigt lokale Netzwerkdaten wie IP-Adresse/WLAN-Status und bietet zusaetzlich
+  // einen bewusst einfachen lokalen Resetpunkt fuer den ESP32 an.
+  // Damit kann der Controller auch ohne Web-UI neu gestartet werden.
   bool tftInfoScreenActive = false;
+
+  // V3: Auswahl innerhalb der TFT-Info-Seite.
+  // false = zurueck ins Hauptmenue, true = ESP32 neu starten.
+  // Der Reset wird erst mit MODE ausgefuehrt; PLUS/MINUS schalten nur die Auswahl um.
+  bool tftInfoResetSelected = false;
 
   // Im Menuepunkt 1 wird zuerst nur die Ausrichtung vorbereitet.
   // Die eigentliche Azimut-Referenzfahrt startet erst mit MODE.
@@ -2507,10 +2513,13 @@ const char* liveGetInfoText() {
       static char ipInfoBuf[128];
       const String ip = wifiGetIpString();
       const String ssid = wifiGetConnectedSsid();
-      const String rssi = wifiGetRssiString();
+      // V3: Fuer die TFT-Info-Seite werden nur stabile Werte ausgegeben.
+      // Der RSSI-Wert schwankt laufend und wuerde sonst ein staendiges
+      // Neuzeichnen/Flaechenflackern der Infoanzeige verursachen.
       snprintf(ipInfoBuf, sizeof(ipInfoBuf),
-               "INFO_SCREEN|IP=%s|SSID=%s|RSSI=%s",
-               ip.c_str(), ssid.c_str(), rssi.c_str());
+               "INFO_SCREEN|IP=%s|SSID=%s|RESET=%d",
+               ip.c_str(), ssid.c_str(),
+               tftInfoResetSelected ? 1 : 0);
       return ipInfoBuf;
     }
 
@@ -3762,21 +3771,47 @@ static void processButtonLogic() {
     }
 
     if (tftInfoScreenActive) {
+      // V3: Info-Seite mit zwei Auswahlpunkten:
+      // - IP-Anzeige: reine Information, MODE kurz bestaetigt nichts
+      // - RESET: ESP32-Neustart nach MODE kurz
+      // MODE lang fuehrt immer zurueck ins Hauptmenue. So kann der Nutzer die
+      // Seite sicher verlassen, ohne versehentlich einen Neustart auszuloesen.
+      if (btnPlus.pressEvent || btnMinus.pressEvent) {
+        tftInfoResetSelected = !tftInfoResetSelected;
+        Serial.print("INFO V3: Auswahl = ");
+        Serial.println(tftInfoResetSelected ? "RESET" : "IP");
+        return;
+      }
+
       if (btnMode.pressEvent) {
-        tftInfoScreenActive = false;
-        Serial.println("INFO V3: Zurueck ins Hauptmenue.");
+        modePressStartMs = millis();
+        modeLongHandled = false;
         return;
       }
 
-      if (btnPlus.pressEvent) {
-        tftInfoScreenActive = false;
-        selectNextMainMenuItem();
-        return;
+      if (btnMode.stablePressed && !modeLongHandled && count == 1) {
+        if (millis() - modePressStartMs >= BTN_MODE_LONGPRESS_MS) {
+          tftInfoScreenActive = false;
+          tftInfoResetSelected = false;
+          modeLongHandled = true;
+          Serial.println("INFO V3: MODE lang -> Hauptmenue.");
+          return;
+        }
       }
 
-      if (btnMinus.pressEvent) {
-        tftInfoScreenActive = false;
-        selectPreviousMainMenuItem();
+      if (btnMode.releaseEvent && !modeLongHandled) {
+        if (tftInfoResetSelected) {
+          // V3: Lokaler Reset aus der TFT-Info-Seite.
+          // Vor dem Neustart werden beide Motorachsen sicher gestoppt und eine
+          // eventuell laufende Suche/Mittenfahrt abgebrochen.
+          Serial.println("INFO V3: ESP Reset ueber TFT-Info-Menue.");
+          abortAutoSequence();
+          stopManualActuators();
+          delay(150);
+          ESP.restart();
+        } else {
+          Serial.println("INFO V3: IP-Anzeige bestaetigt, keine Aktion.");
+        }
         return;
       }
 

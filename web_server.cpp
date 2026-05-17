@@ -1126,11 +1126,11 @@ static void handleSystemResetExecute() {
   // 1) Motoren stoppen.
   // 2) Diese Warteseite an den Browser senden.
   // 3) ESP32 neu starten.
-  // 4) Die Warteseite wartet laenger als das Boot-/Winkel-Startfenster und
-  //    prueft danach wiederholt, ob die Standardseite / wieder erreichbar ist.
+  // 4) Die Warteseite prueft danach wiederholt, ob die Standardseite /
+  //    wieder erreichbar ist.
   // Dadurch ist die Rueckkehr deutlich robuster als ein einmaliger Meta-Refresh,
-  // weil der ESP32 waehrend Neustart, Winkel-Startfenster und WLAN-Verbindung
-  // fuer einige Sekunden keine HTTP-Anfragen beantworten kann.
+  // weil der ESP32 waehrend Neustart und WLAN-Verbindung fuer einige Sekunden
+  // keine HTTP-Anfragen beantworten kann.
   String html;
   html.reserve(2600);
   html += F("<!DOCTYPE html><html><head><meta charset='utf-8'>");
