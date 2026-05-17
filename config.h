@@ -133,7 +133,27 @@ extern float DEFAULT_TARGET_ELEVATION;
 // Toleranz, innerhalb der ein Ziel als erreicht gilt.
 extern float ELEVATION_TOLERANCE_DEG;
 
-// V3: Boot-EZ-Startwerte wurden entfernt; kein eigener EZ-Startbildschirm mehr.
+// Boot-Toleranz fuer die automatische Standard-EZ-Anfahrt.
+// Kommentarstand: V3
+// Wird vor dem Hauptmenue verwendet, damit die Antenne nach jedem Einschalten
+// von einem definierten Elevationswert startet.
+extern float BOOT_ELEVATION_TOLERANCE_DEG;
+
+// Sicherheits-Timeout fuer die Boot-Anfahrt auf DEFAULT_TARGET_ELEVATION.
+// Kommentarstand: V3
+extern unsigned long BOOT_ELEVATION_TIMEOUT_MS;
+
+// Anzeige-/Bedien-Timeout fuer den sichtbaren EZ-Start-Countdown.
+// Kommentarstand: V3
+// Dieser Wert steuert die Boot-EZ-Anfahrt und wird auf dem TFT heruntergezaehlt,
+// damit der User erkennt, wie lange der automatische EZ-Start maximal laeuft.
+extern unsigned long BOOT_ELEVATION_DISPLAY_TIMEOUT_MS;
+
+// Zeitfenster fuer den manuellen Winkel-Startbildschirm beim Einschalten.
+// Kommentarstand: V3
+// Der Nutzer kann in dieser Zeit den Winkel mit PLUS/MINUS korrigieren;
+// danach geht die Anlage automatisch ins Hauptmenue.
+extern unsigned long BOOT_MANUAL_ELEVATION_WINDOW_MS;
 
 // PWM-Wert für schnelle Elevationsbewegung.
 extern int EL_PWM_FAST;

@@ -7,6 +7,10 @@
 
 #pragma once
 
+// V3: Zeitfenster fuer den manuellen Winkel-Startbildschirm beim Einschalten.
+// Definition und Defaultwert liegen in settings.cpp.
+extern unsigned long BOOT_MANUAL_ELEVATION_WINDOW_MS;
+
 
 // Initialisiert das zentrale Settings-System.
 //
