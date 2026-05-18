@@ -244,6 +244,23 @@ static int rfPercentFromAdc(float adc) {
   return 8;
 }
 
+// V3_01: Zentrale RF-Darstellung fuer die Web-UI.
+// Der AD8317/AD8318 arbeitet im aktuellen Aufbau invers:
+// kleinerer ADC-/Spannungswert = staerkeres Signal. Nutzer sollen deshalb
+// keine realen Spannungen interpretieren muessen. Alle normalen Web-Anzeigen
+// zeigen RF als Prozentwert: 0 % = schwach/kein Signal, 100 % = sehr gut.
+static int liveGetRfPercent() {
+  return rfPercentFromAdc(liveGetRfFilteredAdc());
+}
+
+static String rfPercentText() {
+  return String(liveGetRfPercent()) + "%";
+}
+
+static String rfDisplayText() {
+  return rfPercentText() + " - " + String(liveGetRfQualityText());
+}
+
 static String rfColorFromQuality(const String& q) {
   const String cls = rfQualityClass(q);
   if (cls == "good") return "#2e9d64";
@@ -324,20 +341,18 @@ static void reserveHtml(String& html, size_t bytes) {
 // verwirrend. Diagnosewerte bleiben weiterhin auf der separaten Statusseite.
 
 // RF-Diagnosekarte.
-// Aktualisiert vor dem Anzeigen einmal den RF-Wert und stellt Spannung, RAW-Wert
-// und Qualitaet dar. Die Ampel-/Balkenfarbe ist nur Visualisierung; die
-// Bewertung selbst kommt aus dem RF-Modul.
+// Aktualisiert vor dem Anzeigen einmal den RF-Wert und stellt Signalstaerke
+// in Prozent sowie Qualitaet dar. Die Ampel-/Balkenfarbe ist nur
+// Visualisierung; die Bewertung selbst kommt aus dem RF-Modul.
 static String rfCard() {
   rfUpdate();
   const String rfQuality = liveGetRfQualityText();
-  const float rfV = liveGetRfVoltage();
-  const float rfAdc = liveGetRfFilteredAdc();
-  const int rfPercent = rfPercentFromAdc(rfAdc);
+  const int rfPercent = liveGetRfPercent();
   const String rfColor = rfColorFromQuality(rfQuality);
 
   String html;
   html += "<div class='card'>";
-  html += "<div class='bigRf'>RF " + String(rfV, 3) + " V / " + String(rfAdc, 0) + " ADC - " + esc(rfQuality) + "</div>";
+  html += "<div class='bigRf'>RF " + String(rfPercent) + "% - " + esc(rfQuality) + "</div>";
   html += "<div class='bar'><div class='fill' style='width:" + String(rfPercent) + "%;background:" + rfColor + "'></div></div>";
   html += "</div>";
   return html;
@@ -417,7 +432,7 @@ static String buildAusrichtenPage() {
   // waehrend Phase, Info, RF und Winkel trotzdem live mitlaufen.
   html += "<div class='statusGrid' style='margin-top:12px'>";
   html += "<div class='statusBox'><span>Phase</span><b id='centerPhase'>" + String(liveGetCenteringPhaseText()) + "</b></div>";
-  html += "<div class='statusBox'><span>RF</span><b id='centerRf'>" + String(liveGetRfVoltage(), 3) + " V</b></div>";
+  html += "<div class='statusBox'><span>RF</span><b id='centerRf'>" + rfPercentText() + "</b></div>";
   html += "<div class='statusBox'><span>Winkel</span><b id='centerAngle'>" + String(liveGetRelativeAngleDeg(), 2) + " deg</b></div>";
   html += "<div class='statusBox'><span>Info</span><b id='centerInfo'>" + String(liveGetCenteringInfoText()) + "</b></div>";
   html += "</div>";
@@ -518,7 +533,7 @@ static String buildAutoPage() {
     // Die fruehere Funktion "Signal optimieren" ist aus der Web-UI entfernt.
     html += "<div class='chips'>" + chip("SAT-KANDIDAT", "blue") + chip("Signal " + rfQuality, rfQualityClass(rfQuality)) + "</div>";
     html += "<div class='pageLead'>Bitte am Receiver/TV pruefen, ob es der richtige Satellit ist. Die RF-Ampel ist nur eine Hilfe; die Entscheidung trifft der Nutzer.</div>";
-    html += row("RF-Bewertung", rfQuality + " / " + String(liveGetRfFilteredAdc(), 0) + " ADC");
+    html += row("RF-Bewertung", rfDisplayText());
     html += "<div class='ctrl3' style='margin-top:12px'>";
     html += actionButton("/candidate/ok", "+ OK", true, "green");
     html += actionButton("/candidate/false", "- FALSCH", true, "orange");
@@ -556,7 +571,7 @@ static String buildAutoPage() {
     const String ezTarget = String(DEFAULT_TARGET_ELEVATION, 1);
     html += "<div class='chips'>" + chip("MITTE ERREICHT", "blue") + chip("Winkel pruefen", "warn") + "</div>";
     html += "<div class='pageLead'>Die Anlage steht wieder in der Mitte. Bitte Winkel leicht veraendern, RF-Signal beobachten und die Suche bei Bedarf erneut starten.</div>";
-    html += row("RF", String(liveGetRfVoltage(), 3) + " V - " + rfQuality);
+    html += row("RF", rfDisplayText());
     html += row("Winkel", String(liveGetRelativeAngleDeg(), 2) + " deg");
     html += "<div class='grid2' style='margin-top:12px'>";
     html += actionButton("/auto/ez/down", "Winkel -  Ist " + ezNow + " / Ziel " + ezTarget, mpuReady, "orange");
@@ -575,7 +590,7 @@ static String buildAutoPage() {
     html += "<div class='pageLead'>Die Suche ist aktiv. Die Anlage prueft das Signal waehrend Mitte, Ostfahrt, Westfahrt und Rueckfahrt zur Mitte.</div>";
     html += "<div class='row'><span>Phase</span><b id='autoPhase'>" + phase + "</b></div>";
     html += "<div class='row'><span>Info</span><b id='autoInfo'>" + info + "</b></div>";
-    html += "<div class='row'><span>RF</span><b id='autoRf'>" + String(liveGetRfVoltage(), 3) + " V - " + rfQuality + "</b></div>";
+    html += "<div class='row'><span>RF</span><b id='autoRf'>" + rfDisplayText() + "</b></div>";
     html += "<div class='row'><span>Winkel</span><b id='autoAngle'>" + String(liveGetRelativeAngleDeg(), 2) + " deg</b></div>";
     html += actionButton("/auto/abort", "SUCHE ABBRUCH", true, "red");
     html += "<script>";
@@ -688,31 +703,31 @@ static String buildManualPage() {
 }
 
 static String diagnoseClass() {
-  const float rfV = liveGetRfVoltage();
+  const String rfQuality = liveGetRfQualityText();
   if (liveAutoFailed()) return "bad";
   if (liveHallEast() || liveHallWest()) return "warn";
-  if (rfV > 0.82f) return "warn";
+  if (rfQuality == "schwach") return "warn";
   if (liveIsCandidateHold()) return "warn";
   return "good";
 }
 
 static String diagnoseTitle() {
-  const float rfV = liveGetRfVoltage();
+  const String rfQuality = liveGetRfQualityText();
   if (liveAutoFailed()) return "Such-Fehler erkannt";
   if (liveHallEast()) return "Azimut Ost-Limit aktiv";
   if (liveHallWest()) return "Azimut West-Limit aktiv";
   if (liveIsCandidateHold()) return "Satellitenkandidat gefunden";
-  if (rfV > 0.82f) return "RF-Signal schwach";
+  if (rfQuality == "schwach") return "RF-Signal schwach";
   return "System wirkt plausibel";
 }
 
 static String diagnoseRecommendation() {
-  const float rfV = liveGetRfVoltage();
+  const String rfQuality = liveGetRfQualityText();
   if (liveAutoFailed()) return "Fehlertext und Hallwerte pruefen. Danach ggf. manuell korrigieren, Ausrichten erneut starten oder ESP Reset verwenden.";
   if (liveHallEast()) return "Manuell Azimut nach West fahren. Danach Ausrichten erneut starten.";
   if (liveHallWest()) return "Manuell Azimut nach Ost fahren. Danach Ausrichten erneut starten.";
   if (liveIsCandidateHold()) return "Am Receiver/TV pruefen: + OK bei richtigem Satelliten, - FALSCH wenn es nicht Astra ist.";
-  if (rfV > 0.82f) return "Sat-Receiver eingeschaltet? RF-Signalweg und Koax-Verbindung pruefen. Bei Hardwareverdacht InstallTest verwenden.";
+  if (rfQuality == "schwach") return "Sat-Receiver eingeschaltet? RF-Signalweg und Koax-Verbindung pruefen. Bei Hardwareverdacht InstallTest verwenden.";
   return "Keine offensichtliche Stoerung. Fuer die Suche zuerst Ausrichten ausfuehren und Receiver eingeschaltet lassen.";
 }
 
@@ -741,7 +756,7 @@ static String buildTroubleshootingPage() {
 
   html += "<div class='card'><div class='title'><h2>Schnellpruefung</h2></div>";
   html += row("Receiver", "muss eingeschaltet sein");
-  html += row("RF", String(liveGetRfVoltage(), 3) + " V - " + String(liveGetRfQualityText()));
+  html += row("RF", rfDisplayText());
   html += row("Winkel", String(liveGetRelativeAngleDeg(), 2) + " deg");
   // V3: Die Hilfe-Seite zeigt die aktuellen Netzwerkdaten direkt mit an.
   // Dadurch kann der Nutzer die Web-UI-Adresse auch ohne Serial Monitor
@@ -792,6 +807,7 @@ static String buildStatusPage() {
   html += row("WLAN-Signal", wifiGetRssiString());
   html += row("Winkel", String(liveGetRelativeAngleDeg(), 2) + " deg");
   html += row("MPU gefiltert", String(liveGetFilteredAngleDeg(), 2) + " deg");
+  html += row("RF Signal", rfDisplayText());
   html += row("RAW ADC", String(liveGetRfRawAdc()));
   html += row("Filtered ADC", String(liveGetRfFilteredAdc(), 1));
   html += "<div id='hallStatusRow' class='row " + hallSensorRowClass() + "'><span>Hall-Sensoren</span><b id='hallStatus'>" + hallSensorSummary() + "</b></div>";
@@ -861,7 +877,7 @@ static void sendCenterStatusJson() {
   json += "\"info\":\"" + jsonEsc(info) + "\",";
   json += "\"phase\":\"" + jsonEsc(liveGetCenteringPhaseText()) + "\",";
   json += "\"centerInfo\":\"" + jsonEsc(liveGetCenteringInfoText()) + "\",";
-  json += "\"rfText\":\"" + jsonEsc(String(liveGetRfVoltage(), 3) + " V / RAW " + String(liveGetRfRawAdc()) + " / FILT " + String(liveGetRfFilteredAdc(), 1)) + "\",";
+  json += "\"rfText\":\"" + jsonEsc(rfDisplayText()) + "\",";
   json += "\"angleText\":\"" + jsonEsc(String(liveGetRelativeAngleDeg(), 2) + " deg") + "\",";
   json += "\"hallC\":" + jsonBool(liveHallCenter()) + ",";
   json += "\"hallE\":" + jsonBool(liveHallEast()) + ",";
@@ -883,7 +899,7 @@ static void sendAutoStatusJson() {
   const bool running = inAuto && !liveAutoSetupActive() && !liveAutoFailed() && !liveIsSatelliteConfirmed() && !liveIsCandidateHold();
   const String phase = liveGetAutoStateText();
   const String info = liveGetInfoText();
-  const String rfText = String(liveGetRfVoltage(), 3) + " V - " + String(liveGetRfQualityText());
+  const String rfText = rfDisplayText();
   const String angleText = String(liveGetRelativeAngleDeg(), 2) + " deg";
 
   String json = "{";

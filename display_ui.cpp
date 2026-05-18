@@ -66,7 +66,7 @@ static Adafruit_ST7735 tft(PIN_TFT_CS, PIN_TFT_DC, PIN_TFT_MOSI, PIN_TFT_SCK, -1
 // Das Layout ist bewusst einfach und robust in fünf feste Zonen geteilt:
 //
 // 1. Mode-Leiste       -> globaler Betriebszustand (MANUELL / SUCHE / WARNUNG)
-// 2. Signalblock       -> RF-Spannung, Balken und Peakmarke
+// 2. Signalblock       -> RF-Prozent, Balken und Peakmarke
 // 3. Elevationszeile   -> Winkel + Bewegungs-/Statusinfo
 // 4. Azimutzeile       -> Richtung + Bewegungs-/Statusinfo
 // 5. Infozeile         -> allgemeiner Klartext aus der Runtime
@@ -382,18 +382,26 @@ void drawModeBar(UiMode mode) {
 // Zeichnet den kompletten Signalblock.
 //
 // Inhalt:
-// - gemessene RF-Spannung
+// - RF-Signalstaerke in Prozent
 // - normierter Signalbalken
 // - Peak-Markierung des besten Werts
 // - kurze Textbeschreibung
 void drawSignalBlock(float volts, float norm, float bestNorm, const char* signalText) {
   clearZone(1, Y_SIGNAL_TOP + 1, SCREEN_W - 2, H_SIGNAL - 2, C_PANEL);
 
-  // Spannungsanzeige oben im Block
-  // V3 Outdoor-Kontrast: RF-Wert groesser statt viele kleine Details.
+  // V3_01: Die RF-Anzeige arbeitet fuer den Nutzer bewusst nicht mehr mit
+  // realen Spannungen. Der AD8317/AD8318 liefert im aktuellen Aufbau ein
+  // inverses Signal: niedrige Spannung/niedriger ADC = starkes Satellitensignal.
+  // Die Runtime liefert bereits einen normierten Wert 0.0 ... 1.0, bei dem
+  // 1.0 = sehr gutes Signal und 0.0 = kein/schwaches Signal bedeutet.
+  // Daraus wird hier ein gut lesbarer Prozentwert gebildet.
+  (void)volts;  // Spannung bleibt Schnittstellenwert, wird aber nicht angezeigt.
+  norm = clamp01(norm);
+  const int signalPercent = (int)(norm * 100.0f + 0.5f);
+
   String v = "RF ";
-  v += String(volts, 2);
-  v += "V";
+  v += String(signalPercent);
+  v += "%";
   writeText(6, Y_SIGNAL_TOP + 3, C_TEXT, C_PANEL, 2, v);
 
   // Balkengeometrie

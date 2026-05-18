@@ -53,11 +53,14 @@ struct DisplayData {
   // ---------------------------------------------------
 
   // Aktuelle gemessene RF-Spannung am ADC-Pfad.
-  // Beispiel: 2.41 V
+  // V3_01: Dieser Wert bleibt intern verfuegbar, wird auf dem TFT aber
+  // nicht mehr direkt angezeigt. Sichtbar ist stattdessen der aus
+  // signalNorm abgeleitete Prozentwert.
   float signalVolts;
 
   // Normierter aktueller Signalwert 0.0 ... 1.0
-  // für Balken und farbliche Bewertung.
+  // fuer Prozentanzeige, Balken und farbliche Bewertung.
+  // Wichtig: 1.0 = starkes Signal, 0.0 = schwaches/kein Signal.
   float signalNorm;
 
   // Bester bisher beobachteter normierter Signalwert.
@@ -130,7 +133,7 @@ void displayShowSouthAlignPrompt();
 // Zeichnet die obere Mode-Leiste.
 void drawModeBar(UiMode mode);
 
-// Zeichnet den Signalbereich inkl. Balken, Spannung und Status.
+// Zeichnet den Signalbereich inkl. Prozentwert, Balken und Status.
 void drawSignalBlock(float volts, float norm, float bestNorm, const char* signalText);
 
 // Zeichnet die Elevationszeile.
