@@ -149,7 +149,7 @@ float ELEVATION_MAX_SOFT = 34.0f;
 // Standard-EZ-Winkel nach dem Einschalten.
 //
 // Verwendung in dieser Version:
-// - Boot: wird in der manuellen EZ-Startphase als empfohlener Startwert angezeigt
+// - Suchen/Web-UI: wird als empfohlener Standardwinkel angezeigt
 // - Web-UI: wird im Such-Setup als Standard-EZ/Ziel angezeigt
 // - Diagnose: wird im Serial-Settings-Dump ausgegeben
 //
@@ -166,55 +166,8 @@ float DEFAULT_TARGET_ELEVATION = 30.0f;
 // Toleranz für normale Zielanfahrten.
 float ELEVATION_TOLERANCE_DEG = 1.0f;
 
-// Boot-Toleranz fuer die automatische Standard-EZ-Anfahrt.
-// Kommentarstand: V3
-//
-// Live-Test-Anpassung V3:
-// Die Elevation muss beim Einschalten nicht hochpraezise getroffen werden.
-// Sie soll die Antenne nur reproduzierbar in einen sinnvollen Suchbereich
-// bringen; die eigentliche Feinausrichtung erfolgt danach ueber RF/Suche.
-//
-// Der separate MPU-Stillstandstest zeigte bereits ohne Bewegung einen
-// Schwankungsbereich von ca. 0.7 Grad. Eine alte Toleranz von 0.30 Grad war
-// deshalb zu streng und konnte unnoetige Nachregelungen oder Hinweise ausloesen.
-// 1.0 Grad ist fuer den Start praxisnaeher und passt zur groben EZ-Vorposition.
-float BOOT_ELEVATION_TOLERANCE_DEG = 1.0f;
-
-// Historischer Timeout-Wert fuer die alte automatische Boot-EZ-Anfahrt.
-// Kommentarstand: V3
-//
-// V3aq:
-// Der automatische EZ-Start mit Countdown/Timeout wird im aktuellen Bootablauf
-// nicht mehr verwendet. Stattdessen stellt der Nutzer die Elevation direkt
-// nach dem MPU-Test manuell ein und bestaetigt mit MODE. Der Wert bleibt als
-// dokumentierter Diagnose-/Rueckfallwert im Code, damit fruehere Tests und
-// Bemerkungen nachvollziehbar bleiben.
-unsigned long BOOT_ELEVATION_TIMEOUT_MS = 30000;
-
-// Historischer Anzeigen-Timeout fuer den frueheren EZ-Start-Countdown.
-// Kommentarstand: V3
-//
-// V3aq:
-// Im aktuellen Startablauf gibt es keinen Countdown mehr. Die manuelle
-// Startphase hat bewusst kein Zeitlimit, damit der Nutzer die Elevation in
-// Ruhe grob einstellen kann.
-unsigned long BOOT_ELEVATION_DISPLAY_TIMEOUT_MS = 30000;
-
-// Zeitfenster fuer den manuellen Elevations-Startschritt vor dem Hauptmenue.
-// Kommentarstand: V3
-//
-// Diese Zeit wird beim Einschalten fuer den hellblauen "Winkel Start"-Bildschirm
-// verwendet. Innerhalb dieses Fensters kann der Nutzer mit PLUS/MINUS den
-// Winkel grob korrigieren. Nach Ablauf wechselt die Anlage automatisch ins
-// Hauptmenue.
-//
-// V3-Entscheidung:
-// Der Wert liegt zentral in settings.cpp, weil er ein einstellbarer
-// Bedienparameter ist und nicht als lokale Konstante in der .ino-Datei
-// versteckt sein soll.
-//
-// Aktueller Testwert: 10 Sekunden.
-unsigned long BOOT_MANUAL_ELEVATION_WINDOW_MS = 10000;
+// V3: Der fruehere automatische/manuelle Boot-EZ-Start wurde entfernt.
+// Die Elevation wird nun direkt in den normalen Menues korrigiert.
 
 // PWM für schnelle Elevationsfahrt
 int EL_PWM_FAST = 140;
@@ -401,10 +354,6 @@ static void applyDefaultSettings() {
 
   DEFAULT_TARGET_ELEVATION = 30.0f;
   ELEVATION_TOLERANCE_DEG = 1.0f;
-  BOOT_ELEVATION_TOLERANCE_DEG = 1.0f;
-  BOOT_ELEVATION_TIMEOUT_MS = 30000;
-  BOOT_ELEVATION_DISPLAY_TIMEOUT_MS = 30000;
-  BOOT_MANUAL_ELEVATION_WINDOW_MS = 10000;
 
   EL_PWM_FAST = 140;
   EL_PWM_SLOW = 90;
@@ -530,14 +479,6 @@ void printSettingsToSerial() {
   Serial.println(DEFAULT_TARGET_ELEVATION, 2);
   Serial.print("ELEVATION_TOLERANCE_DEG = ");
   Serial.println(ELEVATION_TOLERANCE_DEG, 2);
-  Serial.print("BOOT_ELEVATION_TOLERANCE_DEG = ");
-  Serial.println(BOOT_ELEVATION_TOLERANCE_DEG, 2);
-  Serial.print("BOOT_ELEVATION_TIMEOUT_MS = ");
-  Serial.println(BOOT_ELEVATION_TIMEOUT_MS);
-  Serial.print("BOOT_ELEVATION_DISPLAY_TIMEOUT_MS = ");
-  Serial.println(BOOT_ELEVATION_DISPLAY_TIMEOUT_MS);
-  Serial.print("BOOT_MANUAL_ELEVATION_WINDOW_MS = ");
-  Serial.println(BOOT_MANUAL_ELEVATION_WINDOW_MS);
 
   Serial.print("EL_PWM_FAST = ");
   Serial.println(EL_PWM_FAST);
