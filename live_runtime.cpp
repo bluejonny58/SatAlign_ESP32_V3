@@ -55,6 +55,7 @@
 #include "rf_detector.h"
 #include "control_state.h"
 #include "wifi_manager.h"   // V3: Zugriff auf IP-Adresse und verbundenes WLAN fuer die TFT-Info-Seite.
+#include "settings.h"       // V3_01: zentrale RF-Prozent-Schwelle fuer die AUTO-Centerfahrt.
 #include "live_runtime.h"
 
 namespace {
@@ -539,6 +540,20 @@ namespace {
   static const unsigned long AUTO_CONTINUOUS_PSEUDO_STEP_MS = 300;
   static const float AUTO_RF_CANDIDATE_DROP_ADC = 100.0f;
   static const float AUTO_RF_CANDIDATE_EXIT_ADC = 45.0f;
+
+  // V3_01: Die Kandidatenerkennung waehrend der ersten AUTO-Mittenfahrt
+  // ist absichtlich strenger als die normale Ost-/West-Suche.
+  // Hintergrund: Beim Zentrieren kann die Antenne zufaellig an mittleren
+  // oder kurzen RF-Peaks vorbeilaufen. Diese sollen die Suche nicht sofort
+  // anhalten. Nur ein wirklich klares Signal wird dort als Kandidat akzeptiert.
+  //
+  // Der konkrete Prozent-Grenzwert liegt bewusst zentral in settings.cpp:
+  // AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT. Dadurch kann der Wert spaeter
+  // schnell angepasst werden, ohne die AUTO-Zustandsmaschine zu veraendern.
+  // Die Anzeige arbeitet in Prozent: 0 % = schwach/kein Signal, 100 % = sehr gut.
+  // Wegen AD8317/AD8318 gilt intern weiterhin: kleinerer ADC-/Spannungswert
+  // = staerkeres Signal = hoeherer Prozentwert.
+
   static const unsigned long AUTO_RF_DIAG_INTERVAL_MS = 500;
   static const unsigned long AUTO_RETURN_CENTER_TIMEOUT_MS = 60000UL;
 
@@ -1950,12 +1965,16 @@ static bool autoServiceRfCandidateDuringCenter() {
     autoBestVoltage = rfGetPinVoltage();
   }
 
+  const float centerSignalPercent = rfGetSignalPercent();
+
   if (millis() - autoLastRfDiagMs >= AUTO_RF_DIAG_INTERVAL_MS) {
     autoLastRfDiagMs = millis();
     Serial.print("AUTO RF MITTE | ADC=");
     Serial.print(autoRfCurrentAdc, 1);
     Serial.print(" | DROP=");
     Serial.print(autoRfDropAdc, 1);
+    Serial.print(" | RF%=");
+    Serial.print(centerSignalPercent, 0);
     Serial.print(" | AZPOS=");
     Serial.println(azPositionSteps);
   }
@@ -1967,6 +1986,19 @@ static bool autoServiceRfCandidateDuringCenter() {
     return false;
   }
 
+  // V3_01: Beim ersten Suchen waehrend der Centerfahrt wird bewusst NICHT
+  // jede mittlere RF-Aenderung als Kandidat akzeptiert. Die Centerfahrt ist
+  // eine Referenz-/Ausrichtbewegung und soll nur bei einem eindeutig guten
+  // Satellitensignal stoppen. Normale Ost-/West-Suchfahrten verwenden weiter
+  // die empfindlichere AUTO_RF_CANDIDATE_DROP_ADC-Schwelle.
+  if (centerSignalPercent < AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT) {
+    return false;
+  }
+
+  // Zusätzliche Sicherheitsbedingung: Der Prozentwert kommt aus der bekannten
+  // Referenzskalierung, der DROP_ADC aus der aktuellen No-Signal-Baseline.
+  // Beide Bedingungen zusammen verhindern, dass ein rechnerisch hoher Prozent-
+  // wert ohne echten Baseline-Abfall die Mittenfahrt stoppt.
   if (autoRfDropAdc < AUTO_RF_CANDIDATE_DROP_ADC) {
     return false;
   }
@@ -1990,8 +2022,12 @@ static bool autoServiceRfCandidateDuringCenter() {
   // Wichtig: Bei MINUS soll der komplette Suchablauf neu starten und nicht
   // nur die aktuelle Teilfahrt fortsetzen. Darum ist der Resume-Zustand hier
   // AUTO_STATE_NEW_CENTER_START.
-  autoStartCandidateHold(AUTO_STATE_NEW_CENTER_START, "CENTER_RF");
-  Serial.println("AUTO V3_01: RF-Kandidat waehrend Mittenfahrt erkannt. PLUS=OK, MINUS=Suche neu starten.");
+  autoStartCandidateHold(AUTO_STATE_NEW_CENTER_START, "CENTER_RF_GOOD");
+  Serial.print("AUTO V3_01: Guter RF-Kandidat waehrend Mittenfahrt erkannt | RF%=");
+  Serial.print(centerSignalPercent, 0);
+  Serial.print(" | Mindestwert=");
+  Serial.print(AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT, 0);
+  Serial.println(" | PLUS=OK, MINUS=Suche neu starten.");
   return true;
 }
 
