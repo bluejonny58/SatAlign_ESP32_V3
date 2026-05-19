@@ -51,12 +51,6 @@ extern float RF_TV_USABLE_MAX_ADC;
 extern float RF_TV_GOOD_MAX_ADC;
 extern float RF_TV_STRONG_MAX_ADC;
 
-// V3_01: Mindest-Prozentwert fuer die Kandidatenerkennung waehrend
-// der ersten AUTO-Centerfahrt. Diese Schwelle ist bewusst strenger
-// als die normale Ost-/West-Suche: Nur wirklich gute Signale sollen
-// die Centerfahrt stoppen. 0 % = schwach/kein Signal, 100 % = sehr gut.
-extern float AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT;
-
 
 // V3: Reservierte Altwerte der entfernten Signaloptimierung.
 // Definition und Defaultwerte liegen in settings.cpp.

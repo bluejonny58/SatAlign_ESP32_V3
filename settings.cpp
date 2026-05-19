@@ -262,28 +262,6 @@ float RF_TV_GOOD_MAX_ADC   = 800.0f;   // unterhalb: guter Kandidat
 float RF_TV_STRONG_MAX_ADC = 750.0f;   // unterhalb: sehr guter/Peak-naher Bereich
 
 // -----------------------------------------------------
-// AUTO-Centerfahrt: Mindestwert fuer wirklich gute Signale
-// -----------------------------------------------------
-// Kommentarstand: V3_01
-//
-// Dieser Wert steuert ausschliesslich die Kandidatenerkennung waehrend
-// der ersten AUTO-Mittenfahrt beim Suchstart. Dort soll SatAlign nicht
-// bei schwachen oder mittleren Signalen stoppen, sondern nur wenn wirklich
-// ein gutes Satellitensignal erkannt wird.
-//
-// Prozentlogik der Anzeige:
-// - 0 %   = kein / sehr schwaches Signal
-// - 100 % = sehr gutes Signal
-//
-// Wichtig wegen AD8317/AD8318:
-// Intern ist die Rohspannung invers. Kleinerer ADC-/Spannungswert bedeutet
-// staerkeres RF-Signal und damit hoeheren Prozentwert.
-//
-// Bewusste Projektvorgabe:
-// Unter 75 % gilt das Signal nicht als vernuenftiger Satellitenkandidat.
-float AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT = 75.0f;
-
-// -----------------------------------------------------
 // Reservierte Altwerte der entfernten Signaloptimierung
 // -----------------------------------------------------
 // Kommentarstand: V3
@@ -405,12 +383,6 @@ static void applyDefaultSettings() {
   RF_TV_USABLE_MAX_ADC = 900.0f;
   RF_TV_GOOD_MAX_ADC   = 800.0f;
   RF_TV_STRONG_MAX_ADC = 750.0f;
-
-  // V3_01: Mindest-Prozentwert fuer die Kandidatenerkennung waehrend
-  // der ersten AUTO-Mittenfahrt. Zentral in settings.cpp, damit der
-  // Wert spaeter schnell angepasst werden kann, ohne die AUTO-Logik
-  // in live_runtime.cpp durchsuchen zu muessen.
-  AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT = 75.0f;
 
   // Reservierte Altwerte der entfernten Signaloptimierung.
   // V3: Startwerte fuer den Aussentest; bewusst zentral anpassbar.
@@ -545,8 +517,6 @@ void printSettingsToSerial() {
   Serial.println(RF_TV_GOOD_MAX_ADC, 1);
   Serial.print("RF_TV_STRONG_MAX_ADC = ");
   Serial.println(RF_TV_STRONG_MAX_ADC, 1);
-  Serial.print("AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT = ");
-  Serial.println(AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT, 1);
 
   Serial.print("SIGNAL_OPT_AZ_STEP_MS = ");
   Serial.println(SIGNAL_OPT_AZ_STEP_MS);
