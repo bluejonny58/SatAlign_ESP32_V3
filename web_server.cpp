@@ -295,7 +295,7 @@ static String htmlHeader(const String& title, const String& activePage) {
   html += "<div class='top'><div class='brand'><div class='logo'>SAT</div><div><h1>SatAlign ESP32</h1><div class='sub'>V3 mobile Web-UI</div></div></div>";
   html += "<div class='nav'>";
   html += navLink("/", "Menue", "home", activePage);
-  html += navLink("/ausrichten", "Ausr.", "ausrichten", activePage);
+  html += navLink("/ausrichten", "Grund.", "ausrichten", activePage);
   html += navLink("/auto", "Suchen", "auto", activePage);
   html += navLink("/manuell", "Manuell", "manuell", activePage);
   html += navLink("/trouble", "Hilfe", "trouble", activePage);
@@ -367,6 +367,10 @@ static String buildHomePage() {
   return html;
 }
 // Seite "Grundeinstellung".
+// V3_01: Die Web-UI spiegelt bewusst die aktuellen TFT-Texte:
+// - Bereitschaft: ANLAGE centrieren
+// - Laufend: ANLAGE LAEUFT / BITTE WARTEN (gelb/orange)
+// - Erfolg: ANTENNE GROB / NACH SUEDEN / AUSRICHTEN (hellgruen)
 //
 // Aufgabe:
 // - Center-/Mittenfahrt starten
@@ -394,19 +398,19 @@ static String buildGrundeinstellungPage() {
   // ohne dass der Nutzer die Webseite manuell neu laden muss.
   html += "<div id='centerLiveBox'>";
   if (centerActive) {
-    html += "<div id='centerMsg' class='note orangebox'><b>Grundeinstellung laeuft.</b><br>Die Center-/Mittenfahrt ist aktiv. Mit ABBRUCH wird der Motor gestoppt und das Hauptmenue wieder geoeffnet.</div>";
+    html += "<div id='centerMsg' class='note orangebox'><b>ANLAGE LAEUFT</b><br>BITTE WARTEN<br><span class='mini'>Mit ABBRUCH wird die Grundeinstellung gestoppt.</span></div>";
     html += "<div id='centerButtons' class='grid2' style='margin-top:12px'>";
-    html += "<span class='infoPill infoOrange'>Grundeinstellung laeuft</span>";
+    html += "<span class='infoPill infoOrange'>ANLAGE LAEUFT<br>BITTE WARTEN</span>";
     html += actionButton("/center/abort", "ABBRUCH", true, "redLight");
     html += "</div>";
   } else {
     if (centerSuccess) {
-      html += "<div id='centerMsg' class='note successbox'><b>✅ Grundeinstellung erfolgreich beendet.</b><br>Die Mitte wurde gesetzt. Die Antenne kann jetzt grob nach Sueden ausgerichtet werden; danach die Suche starten.</div>";
+      html += "<div id='centerMsg' class='note successbox'><b>ANTENNE GROB</b><br>NACH SUEDEN<br>AUSRICHTEN</div>";
     } else {
-      html += "<div id='centerMsg' class='note'>Bereit fuer die Grundeinstellung. Start setzt die Center-/Mittenreferenz.</div>";
+      html += "<div id='centerMsg' class='note'><b>ANLAGE</b><br>centrieren</div>";
     }
     html += "<div id='centerButtons' class='grid2' style='margin-top:12px'>";
-    html += actionButton("/center/start", centerSuccess ? "Grundeinstellung erneut starten" : "Grundeinstellung starten", mpuReady && !inAuto && !liveAutoSetupActive() && !liveHallEast() && !liveHallWest(), "orange");
+    html += actionButton("/center/start", centerSuccess ? "Grundeinstellung erneut starten" : "Anlage centrieren", mpuReady && !inAuto && !liveAutoSetupActive() && !liveHallEast() && !liveHallWest(), "orange");
     html += actionButton("/", "Zurueck", true, "redLight");
     html += "</div>";
   }
@@ -448,7 +452,7 @@ static String buildGrundeinstellungPage() {
   html += "function centerLimitHtml(d){if(d.hallE&&d.hallW)return '<b>Azimut-Endbereich unklar.</b><br>Ost und West melden gleichzeitig. Bitte Sensoren/Mechanik pruefen.';if(d.hallE)return '<b>Azimut-Ost-Endbereich aktiv.</b><br>Grundeinstellung kann erst wieder starten, wenn die Anlage manuell vorsichtig Richtung West aus dem Endbereich gefahren wurde.';if(d.hallW)return '<b>Azimut-West-Endbereich aktiv.</b><br>Grundeinstellung kann erst wieder starten, wenn die Anlage manuell vorsichtig Richtung Ost aus dem Endbereich gefahren wurde.';return 'Wenn die Anlage einen Endbereich erreicht hat, bitte bei Bedarf ueber die manuelle Steuerung vorsichtig in die Gegenrichtung fahren.';}";
   html += "function updateCenterEndNote(d){var n=document.getElementById('centerEndNote');if(!n)return;var lim=d.hallE||d.hallW;n.className=lim?'note warnbox':'note';n.innerHTML=centerLimitHtml(d);}";
   html += "function centerStartButtons(d,label){var lim=d.hallE||d.hallW;var start=lim?'<span class=\"btn disabled\">'+label+'</span>':'<a class=\"btn orange\" href=\"/center/start\">'+label+'</a>';return start+'<a class=\"btn redLight\" href=\"/\">Zurueck</a>'; }";
-  html += "function updateCenterStatus(){fetch('/api/center/status',{cache:'no-store'}).then(r=>r.json()).then(d=>{setTxt('centerPhase',d.phase);setTxt('centerInfo',d.centerInfo);setTxt('centerRf',d.rfText);setTxt('centerAngle',d.angleText);updateCenterEndNote(d);if(d.active){setCenterHtml('orangebox','<b>'+d.phase+'</b><br>'+d.centerInfo,'<span class=\"infoPill infoOrange\">Grundeinstellung laeuft</span><a class=\"btn redLight\" href=\"/center/abort\">ABBRUCH</a>');}else if(d.success){setCenterHtml('successbox','<b>✅ Grundeinstellung erfolgreich beendet.</b><br>Die Mitte wurde gesetzt. Die Antenne kann jetzt grob nach Sueden ausgerichtet werden; danach die Suche starten.',centerStartButtons(d,'Grundeinstellung erneut starten'));}else if(d.failed){setCenterHtml('warnbox','<b>Grundeinstellung nicht erfolgreich.</b><br>'+d.centerInfo,centerStartButtons(d,'Grundeinstellung erneut starten'));}else if(d.hallE||d.hallW){setCenterHtml('warnbox','<b>Grundeinstellung gesperrt: Endbereich aktiv.</b><br>'+centerLimitHtml(d),centerStartButtons(d,'Grundeinstellung starten'));}else{setCenterHtml('','Bereit fuer die Grundeinstellung. Start setzt die Center-/Mittenreferenz.',centerStartButtons(d,'Grundeinstellung starten'));}}).catch(()=>{});}setInterval(updateCenterStatus,500);updateCenterStatus();";
+  html += "function updateCenterStatus(){fetch('/api/center/status',{cache:'no-store'}).then(r=>r.json()).then(d=>{setTxt('centerPhase',d.phase);setTxt('centerInfo',d.centerInfo);setTxt('centerRf',d.rfText);setTxt('centerAngle',d.angleText);updateCenterEndNote(d);if(d.active){setCenterHtml('orangebox','<b>ANLAGE LAEUFT</b><br>BITTE WARTEN<br><span class=\"mini\">Mit ABBRUCH wird die Grundeinstellung gestoppt.</span>','<span class=\"infoPill infoOrange\">ANLAGE LAEUFT<br>BITTE WARTEN</span><a class=\"btn redLight\" href=\"/center/abort\">ABBRUCH</a>');}else if(d.success){setCenterHtml('successbox','<b>ANTENNE GROB</b><br>NACH SUEDEN<br>AUSRICHTEN',centerStartButtons(d,'Grundeinstellung erneut starten'));}else if(d.failed){setCenterHtml('warnbox','<b>Grundeinstellung nicht erfolgreich.</b><br>'+d.centerInfo,centerStartButtons(d,'Grundeinstellung erneut starten'));}else if(d.hallE||d.hallW){setCenterHtml('warnbox','<b>Grundeinstellung gesperrt: Endbereich aktiv.</b><br>'+centerLimitHtml(d),centerStartButtons(d,'Anlage centrieren'));}else{setCenterHtml('','<b>ANLAGE</b><br>centrieren',centerStartButtons(d,'Anlage centrieren'));}}).catch(()=>{});}setInterval(updateCenterStatus,500);updateCenterStatus();";
   html += "</script>";
 
   html += htmlFooter();
@@ -524,7 +528,7 @@ static String buildAutoPage() {
     html += actionButton("/candidate/false", "- FALSCH", true, "orange");
     html += actionButton("/auto/abort", "ABBRUCH", true, "red");
     html += "</div>";
-    html += "<div class='note'>+ OK bestaetigt den Satelliten und bleibt an der aktuellen Position. - FALSCH sperrt diesen Bereich und die Suche laeuft weiter.</div>";
+    html += "<div class='note'>+ OK bestaetigt Astra 19,2 und zeigt das gruene Abschlussfenster. - FALSCH sperrt diesen Bereich und die Suche laeuft weiter bzw. startet bei Center-Kandidaten neu.</div>";
 
   } else if (autoSetup) {
     const String ezNow = String(liveGetRelativeAngleDeg(), 1);
@@ -594,11 +598,15 @@ static String buildAutoPage() {
     html += "</div>";
 
   } else if (satOk) {
-    html += "<div class='chips'>" + chip("SAT OK", "good") + chip("Suche beendet", "neutral") + "</div>";
-    html += "<div class='pageLead'>Der Satellit wurde bestaetigt. Fuer einen neuen Suchlauf kann das Such-Setup erneut geoeffnet werden.</div>";
+    // V3_01: Web-Abschlussbild an das TFT-Fenster angleichen.
+    // Nach PLUS soll die Web-UI denselben klaren Zustand zeigen wie das Display:
+    // Astra 19,2 wurde gefunden, die Anlage steht und das Geraet kann stromlos
+    // gemacht werden. Weitere Buttons bleiben bewusst zweitrangig.
+    html += "<div class='chips'>" + chip("GEFUNDEN", "good") + chip("Astra 19,2 OK", "good") + "</div>";
+    html += "<div class='note successbox'><b>ASTRA 19,2 GEFUNDEN</b><br>Geraet kann jetzt stromlos gemacht werden.<br><span class='mini'>Am TFT: MODE lang = Menue.</span></div>";
     html += "<div class='grid2' style='margin-top:12px'>";
-    html += actionButton("/auto/setup", "SUCH-SETUP NEU", mpuReady, "primary");
-    html += actionButton("/status", "STATUS", true, "gray");
+    html += actionButton("/", "HAUPTMENUE", true, "greenLight");
+    html += actionButton("/auto/setup", "NEUE SUCHE", mpuReady, "primary");
     html += "</div>";
 
   } else {
