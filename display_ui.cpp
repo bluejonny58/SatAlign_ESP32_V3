@@ -340,6 +340,40 @@ void displayShowMpuBootTestResult(bool ok, float relativeAngleDeg) {
 }
 
 
+// V3: Dauerhafte MPU-Fehleranzeige fuer den Boot-Abbruch.
+//
+// Hintergrund:
+// Ohne MPU6050/GY-521 gibt es keine belastbare Elevationsmessung. Die Anlage
+// darf deshalb nicht in Menue, WLAN-/Web-Betrieb oder AUTO-Suche weiterlaufen,
+// weil der Nutzer sonst den Eindruck bekommen koennte, das System sei bereit.
+//
+// Gestaltung:
+// - 128x128-tauglich, keine langen Saetze
+// - hellrot/rot hervorgehoben
+// - klare Handlungsanweisung: stromlos machen, Sensor/Kabel pruefen, neu starten
+void displayShowMpuFatalBootError() {
+  tft.fillScreen(C_BG);
+
+  // Roter Kopfbereich als eindeutige Warnung.
+  tft.fillRect(0, 0, SCREEN_W, 24, C_WARN_BG);
+  writeText(5, 5, C_WARN_LIGHT, C_WARN_BG, 2, "MPU FEHLT");
+
+  // Kompakte Fehlerursache.
+  writeText(6, 32, C_TEXT, C_BG, 1, "GY-521 / MPU6050");
+  writeText(6, 44, C_TEXT, C_BG, 1, "nicht erkannt");
+  writeText(6, 56, C_TEXT, C_BG, 1, "oder Init Fehler");
+
+  // Deutliche Handlungsempfehlung.
+  writeText(6, 76, C_WARN_LIGHT, C_BG, 1, "Anlage stromlos");
+  writeText(6, 88, C_WARN_LIGHT, C_BG, 1, "machen.");
+  writeText(6, 104, C_IDLE, C_BG, 1, "Sensor/Kabel pruefen");
+  writeText(6, 116, C_IDLE, C_BG, 1, "und neu starten.");
+
+  firstRender = true;
+  lastWasSpecialScreen = true;
+}
+
+
 // Zeigt den Hinweis fuer die grobe Sued-/Mittenausrichtung.
 // Diese Anzeige ist bewusst ein Vollbild-Hinweis und wird vor dem
 // WLAN/OTA-Start gezeigt, damit bei einer WLAN-Wartezeit keine alten

@@ -121,6 +121,11 @@ void displayShowSplash();
 // Zeigt das Ergebnis des MPU6050-/GY-521-Boottests kurz auf dem TFT an.
 void displayShowMpuBootTestResult(bool ok, float relativeAngleDeg);
 
+// V3: Dauerhafte Boot-Sperranzeige, wenn der MPU6050/GY-521 fehlt oder
+// nicht initialisiert werden konnte. Diese Anzeige passt bewusst auf 128x128
+// und bleibt stehen, bis die Anlage stromlos gemacht und neu gestartet wird.
+void displayShowMpuFatalBootError();
+
 // V3: Die frueheren Boot-EZ-Startanzeigen wurden entfernt.
 // Der Bootablauf zeigt nach dem MPU-Test direkt den Sued-Hinweis.
 
