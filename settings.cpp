@@ -284,6 +284,63 @@ float RF_TV_STRONG_MAX_ADC = 750.0f;   // unterhalb: sehr guter/Peak-naher Berei
 float AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT = 75.0f;
 
 // -----------------------------------------------------
+// RF-Referenz- und AUTO-Schwellwerte
+// -----------------------------------------------------
+// Kommentarstand: V3_01
+//
+// Diese Werte waren frueher teilweise direkt in live_runtime.cpp bzw.
+// rf_detector.cpp als lokale Konstanten abgelegt. Sie liegen jetzt bewusst
+// zentral in settings.cpp, damit RF-Verhalten und Kandidatenerkennung bei
+// Aussentests schnell und nachvollziehbar angepasst werden koennen.
+//
+// Wichtig:
+// - Es wird weiterhin nichts in NVS/Preferences gespeichert.
+// - Aenderungen erfolgen bewusst im Code.
+// - Nach einer Aenderung muss der Sketch neu kompiliert und geladen werden.
+// - Beim AD8317/AD8318 gilt: kleinerer ADC-Wert = staerkeres RF-Signal.
+
+// Referenzwerte fuer die Prozentanzeige / Signalnormierung.
+// RF_WEAK_REFERENCE_ADC beschreibt den typischen schwachen/No-Signal-Bereich.
+// RF_STRONG_REFERENCE_ADC beschreibt einen typischen starken Satelliten-Punkt.
+float RF_WEAK_REFERENCE_ADC   = 1883.0f;
+float RF_STRONG_REFERENCE_ADC = 1287.0f;
+
+// Mindest-DROP gegen die RF-Baseline, ab dem ueberhaupt von einem
+// verwertbaren Signalweg gesprochen wird. Dieser Wert ist bewusst niedrig
+// und dient eher der Plausibilitaet als der Kandidatenbestaetigung.
+float RF_VALID_DROP_ADC = 30.0f;
+
+// Normale AUTO-Kandidatenschwellen fuer die Ost-/West-Suche.
+// DROP_ADC = Baseline_ADC - aktueller_ADC. Groesserer DROP bedeutet
+// staerkeres Signal.
+float AUTO_RF_CANDIDATE_DROP_ADC = 100.0f;
+float AUTO_RF_CANDIDATE_EXIT_ADC = 45.0f;
+
+// Dynamische Kandidatenlogik: Die Eintritts-/Austrittsschwellen werden
+// aus dem aktuellen RF-Rauschband berechnet, bleiben aber mindestens bei
+// den folgenden Spannungswerten.
+float AUTO_RF_DYNAMIC_MIN_ENTER_V = 0.05f;
+float AUTO_RF_DYNAMIC_MIN_EXIT_V  = 0.04f;
+float AUTO_RF_DYNAMIC_ENTER_FACTOR = 1.5f;
+float AUTO_RF_DYNAMIC_EXIT_FACTOR  = 1.2f;
+
+// Ein Kandidat muss mehrfach in Folge bestaetigt werden, damit kurze
+// RF-Spitzen oder Einzelmessfehler nicht sofort zum Kandidaten-Hold fuehren.
+int AUTO_CANDIDATE_CONFIRM_COUNT = 3;
+unsigned long AUTO_CANDIDATE_CONFIRM_INTERVAL_MS = 120;
+
+// Schwellwerte fuer falsch bestaetigte Satellitenbereiche.
+// Diese Werte bestimmen, ob ein falscher Kandidat gespeichert wird und
+// wie gross der gesperrte Bereich um diesen Punkt ist.
+float BADSAT_MIN_TRIGGER_V = 0.08f;
+float BADSAT_WEAK_MAX_V = 0.15f;
+int   BADSAT_WEAK_RADIUS_STEPS = 3;
+float BADSAT_STRONG_MAX_V = 0.30f;
+int   BADSAT_STRONG_RADIUS_STEPS = 6;
+int   BADSAT_RESUME_MARGIN_STEPS = 2;
+int   BADSAT_MERGE_GAP_STEPS = 3;
+
+// -----------------------------------------------------
 // Reservierte Altwerte der entfernten Signaloptimierung
 // -----------------------------------------------------
 // Kommentarstand: V3
@@ -411,6 +468,32 @@ static void applyDefaultSettings() {
   // Wert spaeter schnell angepasst werden kann, ohne die AUTO-Logik
   // in live_runtime.cpp durchsuchen zu muessen.
   AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT = 75.0f;
+
+  // V3_01: Zentrale RF-/AUTO-Schwellwerte.
+  // Diese Werte werden bewusst im Code gesetzt und nicht im ESP32-Flash
+  // gespeichert. Dadurch sind Testaenderungen nachvollziehbar und reproduzierbar.
+  RF_WEAK_REFERENCE_ADC   = 1883.0f;
+  RF_STRONG_REFERENCE_ADC = 1287.0f;
+  RF_VALID_DROP_ADC = 30.0f;
+
+  AUTO_RF_CANDIDATE_DROP_ADC = 100.0f;
+  AUTO_RF_CANDIDATE_EXIT_ADC = 45.0f;
+
+  AUTO_RF_DYNAMIC_MIN_ENTER_V = 0.05f;
+  AUTO_RF_DYNAMIC_MIN_EXIT_V  = 0.04f;
+  AUTO_RF_DYNAMIC_ENTER_FACTOR = 1.5f;
+  AUTO_RF_DYNAMIC_EXIT_FACTOR  = 1.2f;
+
+  AUTO_CANDIDATE_CONFIRM_COUNT = 3;
+  AUTO_CANDIDATE_CONFIRM_INTERVAL_MS = 120;
+
+  BADSAT_MIN_TRIGGER_V = 0.08f;
+  BADSAT_WEAK_MAX_V = 0.15f;
+  BADSAT_WEAK_RADIUS_STEPS = 3;
+  BADSAT_STRONG_MAX_V = 0.30f;
+  BADSAT_STRONG_RADIUS_STEPS = 6;
+  BADSAT_RESUME_MARGIN_STEPS = 2;
+  BADSAT_MERGE_GAP_STEPS = 3;
 
   // Reservierte Altwerte der entfernten Signaloptimierung.
   // V3: Startwerte fuer den Aussentest; bewusst zentral anpassbar.
@@ -547,6 +630,47 @@ void printSettingsToSerial() {
   Serial.println(RF_TV_STRONG_MAX_ADC, 1);
   Serial.print("AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT = ");
   Serial.println(AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT, 1);
+
+  Serial.print("RF_WEAK_REFERENCE_ADC = ");
+  Serial.println(RF_WEAK_REFERENCE_ADC, 1);
+  Serial.print("RF_STRONG_REFERENCE_ADC = ");
+  Serial.println(RF_STRONG_REFERENCE_ADC, 1);
+  Serial.print("RF_VALID_DROP_ADC = ");
+  Serial.println(RF_VALID_DROP_ADC, 1);
+
+  Serial.print("AUTO_RF_CANDIDATE_DROP_ADC = ");
+  Serial.println(AUTO_RF_CANDIDATE_DROP_ADC, 1);
+  Serial.print("AUTO_RF_CANDIDATE_EXIT_ADC = ");
+  Serial.println(AUTO_RF_CANDIDATE_EXIT_ADC, 1);
+
+  Serial.print("AUTO_RF_DYNAMIC_MIN_ENTER_V = ");
+  Serial.println(AUTO_RF_DYNAMIC_MIN_ENTER_V, 3);
+  Serial.print("AUTO_RF_DYNAMIC_MIN_EXIT_V = ");
+  Serial.println(AUTO_RF_DYNAMIC_MIN_EXIT_V, 3);
+  Serial.print("AUTO_RF_DYNAMIC_ENTER_FACTOR = ");
+  Serial.println(AUTO_RF_DYNAMIC_ENTER_FACTOR, 2);
+  Serial.print("AUTO_RF_DYNAMIC_EXIT_FACTOR = ");
+  Serial.println(AUTO_RF_DYNAMIC_EXIT_FACTOR, 2);
+
+  Serial.print("AUTO_CANDIDATE_CONFIRM_COUNT = ");
+  Serial.println(AUTO_CANDIDATE_CONFIRM_COUNT);
+  Serial.print("AUTO_CANDIDATE_CONFIRM_INTERVAL_MS = ");
+  Serial.println(AUTO_CANDIDATE_CONFIRM_INTERVAL_MS);
+
+  Serial.print("BADSAT_MIN_TRIGGER_V = ");
+  Serial.println(BADSAT_MIN_TRIGGER_V, 3);
+  Serial.print("BADSAT_WEAK_MAX_V = ");
+  Serial.println(BADSAT_WEAK_MAX_V, 3);
+  Serial.print("BADSAT_WEAK_RADIUS_STEPS = ");
+  Serial.println(BADSAT_WEAK_RADIUS_STEPS);
+  Serial.print("BADSAT_STRONG_MAX_V = ");
+  Serial.println(BADSAT_STRONG_MAX_V, 3);
+  Serial.print("BADSAT_STRONG_RADIUS_STEPS = ");
+  Serial.println(BADSAT_STRONG_RADIUS_STEPS);
+  Serial.print("BADSAT_RESUME_MARGIN_STEPS = ");
+  Serial.println(BADSAT_RESUME_MARGIN_STEPS);
+  Serial.print("BADSAT_MERGE_GAP_STEPS = ");
+  Serial.println(BADSAT_MERGE_GAP_STEPS);
 
   Serial.print("SIGNAL_OPT_AZ_STEP_MS = ");
   Serial.println(SIGNAL_OPT_AZ_STEP_MS);

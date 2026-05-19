@@ -18,6 +18,7 @@
 
 #include "pins.h"
 #include "config.h"
+#include "settings.h"   // V3_01: RF-Referenz- und Drop-Schwellwerte liegen zentral in settings.cpp.
 #include "rf_detector.h"
 
 namespace {
@@ -60,14 +61,14 @@ namespace {
   float noSignalMaxAdc = 1883.0f;
   bool baselineInitialized = false;
 
-  // Referenzpunkte aus dem erfolgreichen GPIO35-/AD8317-Test:
-  // - ca. 1883 RAW = sehr schwach / kein verwertbares Signal
-  // - ca. 1287 RAW = deutliches Signal
-  static const float RF_WEAK_REFERENCE_ADC   = 1883.0f;
-  static const float RF_STRONG_REFERENCE_ADC = 1287.0f;
-
-  // Mindest-DROP fuer die Plausibilitaetsmeldung im Hauptsketch.
-  static const float RF_VALID_DROP_ADC = 30.0f;
+  // V3_01:
+  // Die RF-Referenzpunkte und der Mindest-DROP liegen jetzt zentral in
+  // settings.cpp/settings.h. Dadurch koennen sie nach Aussentests manuell
+  // angepasst werden, ohne diese RF-Auswertelogik selbst zu veraendern.
+  // Verwendete Variablen:
+  // - RF_WEAK_REFERENCE_ADC
+  // - RF_STRONG_REFERENCE_ADC
+  // - RF_VALID_DROP_ADC
 }
 
 // Liest einen ADC-Pin mehrfach ein und bildet daraus den Mittelwert.
@@ -124,6 +125,16 @@ void initRFDetector() {
   // Interne Zustände zurücksetzen
   rawAdc = 0;
   filteredAdc = 0.0f;
+
+  // V3_01:
+  // Auch die Default-Baseline folgt jetzt dem zentralen RF-Referenzwert
+  // aus settings.cpp. Solange noch kein echtes Zero/No-Signal-Fenster
+  // gemessen wurde, verwendet die RF-Logik damit denselben manuellen
+  // Einstellwert wie die Prozent- und DROP-Auswertung.
+  noSignalBaselineAdc = RF_WEAK_REFERENCE_ADC;
+  noSignalMinAdc = RF_WEAK_REFERENCE_ADC;
+  noSignalMaxAdc = RF_WEAK_REFERENCE_ADC;
+  baselineInitialized = false;
   filterInitialized = false;
   minRawAdc = 4095;
   maxRawAdc = 0;

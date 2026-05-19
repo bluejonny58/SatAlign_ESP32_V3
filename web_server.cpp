@@ -27,7 +27,7 @@
 
   Ziel der Web-UI:
   - Bedienung folgt bewusst der Menuestruktur am TFT:
-    1. Ausrichten
+    1. Grundeinstellung
     2. Suchen (interne AUTO-Logik)
     3. Manuell
     4. Status / Diagnose
@@ -244,23 +244,6 @@ static int rfPercentFromAdc(float adc) {
   return 8;
 }
 
-// V3_01: Zentrale RF-Darstellung fuer die Web-UI.
-// Der AD8317/AD8318 arbeitet im aktuellen Aufbau invers:
-// kleinerer ADC-/Spannungswert = staerkeres Signal. Nutzer sollen deshalb
-// keine realen Spannungen interpretieren muessen. Alle normalen Web-Anzeigen
-// zeigen RF als Prozentwert: 0 % = schwach/kein Signal, 100 % = sehr gut.
-static int liveGetRfPercent() {
-  return rfPercentFromAdc(liveGetRfFilteredAdc());
-}
-
-static String rfPercentText() {
-  return String(liveGetRfPercent()) + "%";
-}
-
-static String rfDisplayText() {
-  return rfPercentText() + " - " + String(liveGetRfQualityText());
-}
-
 static String rfColorFromQuality(const String& q) {
   const String cls = rfQualityClass(q);
   if (cls == "good") return "#2e9d64";
@@ -303,7 +286,7 @@ static String commonCss() {
 }
 // Einheitlicher HTML-Kopf fuer alle Seiten.
 // activePage markiert den aktuell offenen Navigationspunkt. Dadurch erkennt man
-// auf dem Handy sofort, ob man im Menue, Ausrichten, Suchen, Manuell oder Hilfe ist.
+// auf dem Handy sofort, ob man im Menue, Grundeinstellung, Suchen, Manuell oder Hilfe ist.
 static String htmlHeader(const String& title, const String& activePage) {
   String html;
   html += "<!DOCTYPE html><html><head><meta charset='utf-8'>";
@@ -341,18 +324,20 @@ static void reserveHtml(String& html, size_t bytes) {
 // verwirrend. Diagnosewerte bleiben weiterhin auf der separaten Statusseite.
 
 // RF-Diagnosekarte.
-// Aktualisiert vor dem Anzeigen einmal den RF-Wert und stellt Signalstaerke
-// in Prozent sowie Qualitaet dar. Die Ampel-/Balkenfarbe ist nur
-// Visualisierung; die Bewertung selbst kommt aus dem RF-Modul.
+// Aktualisiert vor dem Anzeigen einmal den RF-Wert und stellt Spannung, RAW-Wert
+// und Qualitaet dar. Die Ampel-/Balkenfarbe ist nur Visualisierung; die
+// Bewertung selbst kommt aus dem RF-Modul.
 static String rfCard() {
   rfUpdate();
   const String rfQuality = liveGetRfQualityText();
-  const int rfPercent = liveGetRfPercent();
+  const float rfV = liveGetRfVoltage();
+  const float rfAdc = liveGetRfFilteredAdc();
+  const int rfPercent = rfPercentFromAdc(rfAdc);
   const String rfColor = rfColorFromQuality(rfQuality);
 
   String html;
   html += "<div class='card'>";
-  html += "<div class='bigRf'>RF " + String(rfPercent) + "% - " + esc(rfQuality) + "</div>";
+  html += "<div class='bigRf'>RF " + String(rfV, 3) + " V / " + String(rfAdc, 0) + " ADC - " + esc(rfQuality) + "</div>";
   html += "<div class='bar'><div class='fill' style='width:" + String(rfPercent) + "%;background:" + rfColor + "'></div></div>";
   html += "</div>";
   return html;
@@ -360,7 +345,7 @@ static String rfCard() {
 
 // Startseite / Hauptmenue.
 // Die Reihenfolge entspricht der Bedienlogik am Geraet:
-// 1. Ausrichten, 2. AUTO, 3. Manuell, 4. Status, 5. Hilfe.
+// 1. Grundeinstellung, 2. AUTO, 3. Manuell, 4. Status, 5. Hilfe.
 // Die Web-UI soll sich damit wie eine groessere, besser lesbare Variante des
 // TFT-Menues anfuehlen.
 static String buildHomePage() {
@@ -371,7 +356,7 @@ static String buildHomePage() {
   // entfernt. Die Startseite soll nur noch die direkt bedienbaren Menuekacheln
   // anzeigen; Detail- und Hilfetexte stehen in den jeweiligen Unterseiten.
   html += "<div class='tiles'>";
-  html += tile("/ausrichten", "1", "Ausrichten", "Mitte / Center setzen", "t1");
+  html += tile("/ausrichten", "1", "Grundeinstellung", "Mitte / Center setzen", "t1");
   html += tile("/auto", "2", "Suchen", "Winkel pruefen und Suche starten", "t2");
   html += tile("/manuell", "3", "Manuell", "Azimut und Winkel direkt steuern", "t3");
   html += tile("/status", "4", "Status / Diagnose", "RF, Hall, Winkel, Reset", "t4");
@@ -381,7 +366,7 @@ static String buildHomePage() {
   html += htmlFooter();
   return html;
 }
-// Seite "Ausrichten".
+// Seite "Grundeinstellung".
 //
 // Aufgabe:
 // - Center-/Mittenfahrt starten
@@ -400,8 +385,8 @@ static String buildAusrichtenPage() {
 
   String html;
   reserveHtml(html, 12000);
-  html = htmlHeader("Ausrichten", "ausrichten");
-  html += "<div class='card'><div class='title'><h2><span class='step'>1</span>Ausrichten</h2></div>";
+  html = htmlHeader("Grundeinstellung", "ausrichten");
+  html += "<div class='card'><div class='title'><h2><span class='step'>1</span>Grundeinstellung</h2></div>";
   html += "<div class='pageLead'>Setzt die mechanische Mitte als Referenz. Diese Funktion sollte vor der Suche sauber laufen.</div>";
 
   // Live-Bereich: Diese Elemente werden per /api/center/status aktualisiert.
@@ -409,49 +394,49 @@ static String buildAusrichtenPage() {
   // ohne dass der Nutzer die Webseite manuell neu laden muss.
   html += "<div id='centerLiveBox'>";
   if (centerActive) {
-    html += "<div id='centerMsg' class='note orangebox'><b>Ausrichten laeuft.</b><br>Die Center-/Mittenfahrt ist aktiv. Mit ABBRUCH wird der Motor gestoppt und das Hauptmenue wieder geoeffnet.</div>";
+    html += "<div id='centerMsg' class='note orangebox'><b>Grundeinstellung laeuft.</b><br>Die Center-/Mittenfahrt ist aktiv. Mit ABBRUCH wird der Motor gestoppt und das Hauptmenue wieder geoeffnet.</div>";
     html += "<div id='centerButtons' class='grid2' style='margin-top:12px'>";
-    html += "<span class='infoPill infoOrange'>Ausrichten laeuft</span>";
+    html += "<span class='infoPill infoOrange'>Grundeinstellung laeuft</span>";
     html += actionButton("/center/abort", "ABBRUCH", true, "redLight");
     html += "</div>";
   } else {
     if (centerSuccess) {
-      html += "<div id='centerMsg' class='note successbox'><b>✅ Ausrichtung erfolgreich beendet.</b><br>Die Mitte wurde gesetzt. Die Antenne kann jetzt grob nach Sueden ausgerichtet werden; danach die Suche starten.</div>";
+      html += "<div id='centerMsg' class='note successbox'><b>✅ Grundeinstellung erfolgreich beendet.</b><br>Die Mitte wurde gesetzt. Die Antenne kann jetzt grob nach Sueden ausgerichtet werden; danach die Suche starten.</div>";
     } else {
-      html += "<div id='centerMsg' class='note'>Bereit zum Ausrichten. Start setzt die Center-/Mittenreferenz.</div>";
+      html += "<div id='centerMsg' class='note'>Bereit fuer die Grundeinstellung. Start setzt die Center-/Mittenreferenz.</div>";
     }
     html += "<div id='centerButtons' class='grid2' style='margin-top:12px'>";
-    html += actionButton("/center/start", centerSuccess ? "Ausrichten erneut starten" : "Ausrichten starten", mpuReady && !inAuto && !liveAutoSetupActive() && !liveHallEast() && !liveHallWest(), "orange");
+    html += actionButton("/center/start", centerSuccess ? "Grundeinstellung erneut starten" : "Grundeinstellung starten", mpuReady && !inAuto && !liveAutoSetupActive() && !liveHallEast() && !liveHallWest(), "orange");
     html += actionButton("/", "Zurueck", true, "redLight");
     html += "</div>";
   }
 
-  // V3: Livewerte fuer Ausrichten/Mitte.
+  // V3: Livewerte fuer Grundeinstellung/Mitte.
   // Dieser Block wird per /api/center/status aktualisiert, ohne die komplette
   // Seite neu zu laden. Dadurch bleiben Abbruchbutton und Web-UI reaktionsfaehig,
   // waehrend Phase, Info, RF und Winkel trotzdem live mitlaufen.
   html += "<div class='statusGrid' style='margin-top:12px'>";
   html += "<div class='statusBox'><span>Phase</span><b id='centerPhase'>" + String(liveGetCenteringPhaseText()) + "</b></div>";
-  html += "<div class='statusBox'><span>RF</span><b id='centerRf'>" + rfPercentText() + "</b></div>";
+  html += "<div class='statusBox'><span>RF</span><b id='centerRf'>" + String(liveGetRfVoltage(), 3) + " V</b></div>";
   html += "<div class='statusBox'><span>Winkel</span><b id='centerAngle'>" + String(liveGetRelativeAngleDeg(), 2) + " deg</b></div>";
   html += "<div class='statusBox'><span>Info</span><b id='centerInfo'>" + String(liveGetCenteringInfoText()) + "</b></div>";
   html += "</div>";
   html += "</div>";
 
-  // V3: Die Ausrichten-Seite ist eine reine Bedienseite.
+  // V3: Die Grundeinstellung-Seite ist eine reine Bedienseite.
   // Die frueher hier angezeigten Hall-/Rohpin-Diagnosewerte und der
   // separate "Live Status" wurden entfernt, weil sie dem normalen
   // Bediener beim Start der Mittenfahrt nicht helfen und die Seite
   // unnoetig technisch wirken lassen. Diagnosewerte bleiben weiterhin
   // auf der separaten Status-/Diagnose-Seite verfuegbar.
-  // V3: Rote Endbereich-Warnung direkt auf der Ausrichten-Seite.
+  // V3: Rote Endbereich-Warnung direkt auf der Grundeinstellung-Seite.
   // Wenn die Anlage manuell oder durch einen vorherigen Lauf am Ost-/West-Endsensor
   // steht, ist die Mittenfahrt bewusst gesperrt. Der Nutzer soll das sofort sehen
   // und ueber Manuell vorsichtig aus dem Endbereich herausfahren.
   if (liveHallEast()) {
-    html += "<div id='centerEndNote' class='note warnbox'><b>Azimut-Ost-Endbereich aktiv.</b><br>Ausrichten kann erst wieder starten, wenn die Anlage manuell vorsichtig Richtung West aus dem Endbereich gefahren wurde.</div>";
+    html += "<div id='centerEndNote' class='note warnbox'><b>Azimut-Ost-Endbereich aktiv.</b><br>Grundeinstellung kann erst wieder starten, wenn die Anlage manuell vorsichtig Richtung West aus dem Endbereich gefahren wurde.</div>";
   } else if (liveHallWest()) {
-    html += "<div id='centerEndNote' class='note warnbox'><b>Azimut-West-Endbereich aktiv.</b><br>Ausrichten kann erst wieder starten, wenn die Anlage manuell vorsichtig Richtung Ost aus dem Endbereich gefahren wurde.</div>";
+    html += "<div id='centerEndNote' class='note warnbox'><b>Azimut-West-Endbereich aktiv.</b><br>Grundeinstellung kann erst wieder starten, wenn die Anlage manuell vorsichtig Richtung Ost aus dem Endbereich gefahren wurde.</div>";
   } else {
     html += "<div id='centerEndNote' class='note'>Wenn die Anlage einen Endbereich erreicht hat, bitte bei Bedarf ueber die manuelle Steuerung vorsichtig in die Gegenrichtung fahren.</div>";
   }
@@ -460,10 +445,10 @@ static String buildAusrichtenPage() {
   html += "<script>";
   html += "function setTxt(id,v){var e=document.getElementById(id);if(e)e.textContent=v;}";
   html += "function setCenterHtml(msgClass,msgHtml,buttonsHtml){var m=document.getElementById('centerMsg');var b=document.getElementById('centerButtons');if(m){m.className='note '+msgClass;m.innerHTML=msgHtml;}if(b)b.innerHTML=buttonsHtml;}";
-  html += "function centerLimitHtml(d){if(d.hallE&&d.hallW)return '<b>Azimut-Endbereich unklar.</b><br>Ost und West melden gleichzeitig. Bitte Sensoren/Mechanik pruefen.';if(d.hallE)return '<b>Azimut-Ost-Endbereich aktiv.</b><br>Ausrichten kann erst wieder starten, wenn die Anlage manuell vorsichtig Richtung West aus dem Endbereich gefahren wurde.';if(d.hallW)return '<b>Azimut-West-Endbereich aktiv.</b><br>Ausrichten kann erst wieder starten, wenn die Anlage manuell vorsichtig Richtung Ost aus dem Endbereich gefahren wurde.';return 'Wenn die Anlage einen Endbereich erreicht hat, bitte bei Bedarf ueber die manuelle Steuerung vorsichtig in die Gegenrichtung fahren.';}";
+  html += "function centerLimitHtml(d){if(d.hallE&&d.hallW)return '<b>Azimut-Endbereich unklar.</b><br>Ost und West melden gleichzeitig. Bitte Sensoren/Mechanik pruefen.';if(d.hallE)return '<b>Azimut-Ost-Endbereich aktiv.</b><br>Grundeinstellung kann erst wieder starten, wenn die Anlage manuell vorsichtig Richtung West aus dem Endbereich gefahren wurde.';if(d.hallW)return '<b>Azimut-West-Endbereich aktiv.</b><br>Grundeinstellung kann erst wieder starten, wenn die Anlage manuell vorsichtig Richtung Ost aus dem Endbereich gefahren wurde.';return 'Wenn die Anlage einen Endbereich erreicht hat, bitte bei Bedarf ueber die manuelle Steuerung vorsichtig in die Gegenrichtung fahren.';}";
   html += "function updateCenterEndNote(d){var n=document.getElementById('centerEndNote');if(!n)return;var lim=d.hallE||d.hallW;n.className=lim?'note warnbox':'note';n.innerHTML=centerLimitHtml(d);}";
   html += "function centerStartButtons(d,label){var lim=d.hallE||d.hallW;var start=lim?'<span class=\"btn disabled\">'+label+'</span>':'<a class=\"btn orange\" href=\"/center/start\">'+label+'</a>';return start+'<a class=\"btn redLight\" href=\"/\">Zurueck</a>'; }";
-  html += "function updateCenterStatus(){fetch('/api/center/status',{cache:'no-store'}).then(r=>r.json()).then(d=>{setTxt('centerPhase',d.phase);setTxt('centerInfo',d.centerInfo);setTxt('centerRf',d.rfText);setTxt('centerAngle',d.angleText);updateCenterEndNote(d);if(d.active){setCenterHtml('orangebox','<b>'+d.phase+'</b><br>'+d.centerInfo,'<span class=\"infoPill infoOrange\">Ausrichten laeuft</span><a class=\"btn redLight\" href=\"/center/abort\">ABBRUCH</a>');}else if(d.success){setCenterHtml('successbox','<b>✅ Ausrichtung erfolgreich beendet.</b><br>Die Mitte wurde gesetzt. Die Antenne kann jetzt grob nach Sueden ausgerichtet werden; danach die Suche starten.',centerStartButtons(d,'Ausrichten erneut starten'));}else if(d.failed){setCenterHtml('warnbox','<b>Ausrichten nicht erfolgreich.</b><br>'+d.centerInfo,centerStartButtons(d,'Ausrichten erneut starten'));}else if(d.hallE||d.hallW){setCenterHtml('warnbox','<b>Ausrichten gesperrt: Endbereich aktiv.</b><br>'+centerLimitHtml(d),centerStartButtons(d,'Ausrichten starten'));}else{setCenterHtml('','Bereit zum Ausrichten. Start setzt die Center-/Mittenreferenz.',centerStartButtons(d,'Ausrichten starten'));}}).catch(()=>{});}setInterval(updateCenterStatus,500);updateCenterStatus();";
+  html += "function updateCenterStatus(){fetch('/api/center/status',{cache:'no-store'}).then(r=>r.json()).then(d=>{setTxt('centerPhase',d.phase);setTxt('centerInfo',d.centerInfo);setTxt('centerRf',d.rfText);setTxt('centerAngle',d.angleText);updateCenterEndNote(d);if(d.active){setCenterHtml('orangebox','<b>'+d.phase+'</b><br>'+d.centerInfo,'<span class=\"infoPill infoOrange\">Grundeinstellung laeuft</span><a class=\"btn redLight\" href=\"/center/abort\">ABBRUCH</a>');}else if(d.success){setCenterHtml('successbox','<b>✅ Grundeinstellung erfolgreich beendet.</b><br>Die Mitte wurde gesetzt. Die Antenne kann jetzt grob nach Sueden ausgerichtet werden; danach die Suche starten.',centerStartButtons(d,'Grundeinstellung erneut starten'));}else if(d.failed){setCenterHtml('warnbox','<b>Grundeinstellung nicht erfolgreich.</b><br>'+d.centerInfo,centerStartButtons(d,'Grundeinstellung erneut starten'));}else if(d.hallE||d.hallW){setCenterHtml('warnbox','<b>Grundeinstellung gesperrt: Endbereich aktiv.</b><br>'+centerLimitHtml(d),centerStartButtons(d,'Grundeinstellung starten'));}else{setCenterHtml('','Bereit fuer die Grundeinstellung. Start setzt die Center-/Mittenreferenz.',centerStartButtons(d,'Grundeinstellung starten'));}}).catch(()=>{});}setInterval(updateCenterStatus,500);updateCenterStatus();";
   html += "</script>";
 
   html += htmlFooter();
@@ -533,7 +518,7 @@ static String buildAutoPage() {
     // Die fruehere Funktion "Signal optimieren" ist aus der Web-UI entfernt.
     html += "<div class='chips'>" + chip("SAT-KANDIDAT", "blue") + chip("Signal " + rfQuality, rfQualityClass(rfQuality)) + "</div>";
     html += "<div class='pageLead'>Bitte am Receiver/TV pruefen, ob es der richtige Satellit ist. Die RF-Ampel ist nur eine Hilfe; die Entscheidung trifft der Nutzer.</div>";
-    html += row("RF-Bewertung", rfDisplayText());
+    html += row("RF-Bewertung", rfQuality + " / " + String(liveGetRfFilteredAdc(), 0) + " ADC");
     html += "<div class='ctrl3' style='margin-top:12px'>";
     html += actionButton("/candidate/ok", "+ OK", true, "green");
     html += actionButton("/candidate/false", "- FALSCH", true, "orange");
@@ -571,7 +556,7 @@ static String buildAutoPage() {
     const String ezTarget = String(DEFAULT_TARGET_ELEVATION, 1);
     html += "<div class='chips'>" + chip("MITTE ERREICHT", "blue") + chip("Winkel pruefen", "warn") + "</div>";
     html += "<div class='pageLead'>Die Anlage steht wieder in der Mitte. Bitte Winkel leicht veraendern, RF-Signal beobachten und die Suche bei Bedarf erneut starten.</div>";
-    html += row("RF", rfDisplayText());
+    html += row("RF", String(liveGetRfVoltage(), 3) + " V - " + rfQuality);
     html += row("Winkel", String(liveGetRelativeAngleDeg(), 2) + " deg");
     html += "<div class='grid2' style='margin-top:12px'>";
     html += actionButton("/auto/ez/down", "Winkel -  Ist " + ezNow + " / Ziel " + ezTarget, mpuReady, "orange");
@@ -590,7 +575,7 @@ static String buildAutoPage() {
     html += "<div class='pageLead'>Die Suche ist aktiv. Die Anlage prueft das Signal waehrend Mitte, Ostfahrt, Westfahrt und Rueckfahrt zur Mitte.</div>";
     html += "<div class='row'><span>Phase</span><b id='autoPhase'>" + phase + "</b></div>";
     html += "<div class='row'><span>Info</span><b id='autoInfo'>" + info + "</b></div>";
-    html += "<div class='row'><span>RF</span><b id='autoRf'>" + rfDisplayText() + "</b></div>";
+    html += "<div class='row'><span>RF</span><b id='autoRf'>" + String(liveGetRfVoltage(), 3) + " V - " + rfQuality + "</b></div>";
     html += "<div class='row'><span>Winkel</span><b id='autoAngle'>" + String(liveGetRelativeAngleDeg(), 2) + " deg</b></div>";
     html += actionButton("/auto/abort", "SUCHE ABBRUCH", true, "red");
     html += "<script>";
@@ -621,7 +606,7 @@ static String buildAutoPage() {
     // nicht bereit ist und das Such-Setup deshalb nicht automatisch betreten
     // werden darf. Es gibt hier bewusst kein zweites Untermenue mehr.
     html += "<div class='chips'>" + chip("SUCHE NICHT BEREIT", "warn") + chip("Winkel manuell", "blue") + "</div>";
-    html += "<div class='pageLead'>Vor der Suche bitte Ausrichten durchfuehren, den Sat-Receiver einschalten und den Winkelsensor pruefen.</div>";
+    html += "<div class='pageLead'>Vor der Suche bitte Grundeinstellung durchfuehren, den Sat-Receiver einschalten und den Winkelsensor pruefen.</div>";
     html += actionButton("/ausrichten", "AUSRICHTEN", true, "primary");
     if (!mpuReady) {
       html += "<div class='note warnbox'>Winkelsensor ist nicht bereit. Die Suche kann deshalb noch nicht gestartet werden.</div>";
@@ -703,32 +688,32 @@ static String buildManualPage() {
 }
 
 static String diagnoseClass() {
-  const String rfQuality = liveGetRfQualityText();
+  const float rfV = liveGetRfVoltage();
   if (liveAutoFailed()) return "bad";
   if (liveHallEast() || liveHallWest()) return "warn";
-  if (rfQuality == "schwach") return "warn";
+  if (rfV > 0.82f) return "warn";
   if (liveIsCandidateHold()) return "warn";
   return "good";
 }
 
 static String diagnoseTitle() {
-  const String rfQuality = liveGetRfQualityText();
+  const float rfV = liveGetRfVoltage();
   if (liveAutoFailed()) return "Such-Fehler erkannt";
   if (liveHallEast()) return "Azimut Ost-Limit aktiv";
   if (liveHallWest()) return "Azimut West-Limit aktiv";
   if (liveIsCandidateHold()) return "Satellitenkandidat gefunden";
-  if (rfQuality == "schwach") return "RF-Signal schwach";
+  if (rfV > 0.82f) return "RF-Signal schwach";
   return "System wirkt plausibel";
 }
 
 static String diagnoseRecommendation() {
-  const String rfQuality = liveGetRfQualityText();
-  if (liveAutoFailed()) return "Fehlertext und Hallwerte pruefen. Danach ggf. manuell korrigieren, Ausrichten erneut starten oder ESP Reset verwenden.";
-  if (liveHallEast()) return "Manuell Azimut nach West fahren. Danach Ausrichten erneut starten.";
-  if (liveHallWest()) return "Manuell Azimut nach Ost fahren. Danach Ausrichten erneut starten.";
+  const float rfV = liveGetRfVoltage();
+  if (liveAutoFailed()) return "Fehlertext und Hallwerte pruefen. Danach ggf. manuell korrigieren, Grundeinstellung erneut starten oder ESP Reset verwenden.";
+  if (liveHallEast()) return "Manuell Azimut nach West fahren. Danach Grundeinstellung erneut starten.";
+  if (liveHallWest()) return "Manuell Azimut nach Ost fahren. Danach Grundeinstellung erneut starten.";
   if (liveIsCandidateHold()) return "Am Receiver/TV pruefen: + OK bei richtigem Satelliten, - FALSCH wenn es nicht Astra ist.";
-  if (rfQuality == "schwach") return "Sat-Receiver eingeschaltet? RF-Signalweg und Koax-Verbindung pruefen. Bei Hardwareverdacht InstallTest verwenden.";
-  return "Keine offensichtliche Stoerung. Fuer die Suche zuerst Ausrichten ausfuehren und Receiver eingeschaltet lassen.";
+  if (rfV > 0.82f) return "Sat-Receiver eingeschaltet? RF-Signalweg und Koax-Verbindung pruefen. Bei Hardwareverdacht InstallTest verwenden.";
+  return "Keine offensichtliche Stoerung. Fuer die Suche zuerst Grundeinstellung ausfuehren und Receiver eingeschaltet lassen.";
 }
 
 // Hilfe-/Troubleshooting-Seite.
@@ -756,7 +741,7 @@ static String buildTroubleshootingPage() {
 
   html += "<div class='card'><div class='title'><h2>Schnellpruefung</h2></div>";
   html += row("Receiver", "muss eingeschaltet sein");
-  html += row("RF", rfDisplayText());
+  html += row("RF", String(liveGetRfVoltage(), 3) + " V - " + String(liveGetRfQualityText()));
   html += row("Winkel", String(liveGetRelativeAngleDeg(), 2) + " deg");
   // V3: Die Hilfe-Seite zeigt die aktuellen Netzwerkdaten direkt mit an.
   // Dadurch kann der Nutzer die Web-UI-Adresse auch ohne Serial Monitor
@@ -807,7 +792,6 @@ static String buildStatusPage() {
   html += row("WLAN-Signal", wifiGetRssiString());
   html += row("Winkel", String(liveGetRelativeAngleDeg(), 2) + " deg");
   html += row("MPU gefiltert", String(liveGetFilteredAngleDeg(), 2) + " deg");
-  html += row("RF Signal", rfDisplayText());
   html += row("RAW ADC", String(liveGetRfRawAdc()));
   html += row("Filtered ADC", String(liveGetRfFilteredAdc(), 1));
   html += "<div id='hallStatusRow' class='row " + hallSensorRowClass() + "'><span>Hall-Sensoren</span><b id='hallStatus'>" + hallSensorSummary() + "</b></div>";
@@ -859,7 +843,7 @@ static String jsonEsc(const String& in) {
   return s;
 }
 
-// JSON-API fuer die Ausrichten-Seite.
+// JSON-API fuer die Grundeinstellung-Seite.
 // Wird zyklisch vom Browser abgefragt, damit der Nutzer Fortschritt, Erfolg oder
 // Fehler der Center-/Mittenfahrt ohne kompletten Reload sieht.
 static void sendCenterStatusJson() {
@@ -877,7 +861,7 @@ static void sendCenterStatusJson() {
   json += "\"info\":\"" + jsonEsc(info) + "\",";
   json += "\"phase\":\"" + jsonEsc(liveGetCenteringPhaseText()) + "\",";
   json += "\"centerInfo\":\"" + jsonEsc(liveGetCenteringInfoText()) + "\",";
-  json += "\"rfText\":\"" + jsonEsc(rfDisplayText()) + "\",";
+  json += "\"rfText\":\"" + jsonEsc(String(liveGetRfVoltage(), 3) + " V / RAW " + String(liveGetRfRawAdc()) + " / FILT " + String(liveGetRfFilteredAdc(), 1)) + "\",";
   json += "\"angleText\":\"" + jsonEsc(String(liveGetRelativeAngleDeg(), 2) + " deg") + "\",";
   json += "\"hallC\":" + jsonBool(liveHallCenter()) + ",";
   json += "\"hallE\":" + jsonBool(liveHallEast()) + ",";
@@ -899,7 +883,7 @@ static void sendAutoStatusJson() {
   const bool running = inAuto && !liveAutoSetupActive() && !liveAutoFailed() && !liveIsSatelliteConfirmed() && !liveIsCandidateHold();
   const String phase = liveGetAutoStateText();
   const String info = liveGetInfoText();
-  const String rfText = rfDisplayText();
+  const String rfText = String(liveGetRfVoltage(), 3) + " V - " + String(liveGetRfQualityText());
   const String angleText = String(liveGetRelativeAngleDeg(), 2) + " deg";
 
   String json = "{";
@@ -998,17 +982,17 @@ static void handleAusrichtenPage() {
   Serial.println("WEB V3: GET /ausrichten");
 
   // V3: Web-UI und TFT-Menue werden hier bewusst synchronisiert.
-  // Wenn der Nutzer im Browser den Menuepunkt "Ausrichten" oeffnet, soll
+  // Wenn der Nutzer im Browser den Menuepunkt "Grundeinstellung" oeffnet, soll
   // das TFT nicht im vorherigen Menue stehen bleiben, sondern dieselbe
-  // Ausrichten-/Mitte-Seite zeigen wie bei der lokalen Tastenbedienung.
+  // Grundeinstellung-/Mitte-Seite zeigen wie bei der lokalen Tastenbedienung.
   //
   // Wichtig: liveCommandStartCentering() bereitet nur Menuepunkt 1 vor.
   // Die echte Center-/Mittenfahrt startet dadurch NICHT automatisch.
-  // Erst der Web-Button "Ausrichten starten" ruft /center/start auf und
+  // Erst der Web-Button "Grundeinstellung starten" ruft /center/start auf und
   // loest liveCommandStartCenterRun() aus. Dadurch bleibt das reine Oeffnen
   // der Seite sicher und bewegt keinen Motor.
   // V3: Nur das Oeffnen der Web-Seite soll das TFT in den
-  // Ausrichten-/Mitte-Menuepunkt bringen. Es darf aber keine laufende
+  // Grundeinstellung-/Mitte-Menuepunkt bringen. Es darf aber keine laufende
   // oder fehlgeschlagene Mittenfahrt durch einen Seiten-Reload zuruecksetzen.
   // Deshalb wird das Center-Menue nur vorbereitet, wenn wir nicht bereits
   // im Center-Menue sind. Der eigentliche Start bleibt exklusiv bei
@@ -1016,11 +1000,11 @@ static void handleAusrichtenPage() {
   const String modeText = String(liveGetModeText());
 
   // V3: Wenn der Nutzer aus der Web-UI heraus den Menuepunkt
-  // "Ausrichten" oeffnet, soll wirklich die Ausrichten-Seite aktiv sein.
+  // "Grundeinstellung" oeffnet, soll wirklich die Grundeinstellung-Seite aktiv sein.
   // Falls zuvor eine Suche/AUTO-Mitttenfahrt lief, darf deren interner
-  // Center-Zustand nicht als "Ausrichten laeuft" auf dieser Seite erscheinen.
+  // Center-Zustand nicht als "Grundeinstellung laeuft" auf dieser Seite erscheinen.
   // Deshalb wird bei einem Wechsel aus anderen Modi zuerst die Suche sauber
-  // abgebrochen und danach nur das Ausrichten-Menue vorbereitet.
+  // abgebrochen und danach nur das Grundeinstellung-Menue vorbereitet.
   // Ein Reload innerhalb der bereits offenen MITTE-Seite bleibt dagegen
   // unangetastet, damit eine echte Mittenfahrt nicht versehentlich gestoppt wird.
   if (modeText != "MITTE") {

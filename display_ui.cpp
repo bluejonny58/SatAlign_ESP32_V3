@@ -1,7 +1,7 @@
 /*
   SatAlign V3 - TFT-Anzeige
   ------------------------------------------------------------
-  Zeichnet die lokale Anzeige fuer Startfenster, Hauptmenue, Ausrichten,
+  Zeichnet die lokale Anzeige fuer Startfenster, Hauptmenue, Grundeinstellung,
   Suchen, Manuell und Statusmeldungen. Die Anzeige ist bewusst kontrastreich
   gehalten, damit sie auch draussen besser lesbar bleibt.
 */
@@ -145,6 +145,10 @@ static const uint16_t C_WARN_YEL   = rgb565(255, 235, 20);
 static const uint16_t C_SIGNAL_LOW = rgb565(255, 70, 70);
 static const uint16_t C_SIGNAL_MID = rgb565(255, 230, 20);
 static const uint16_t C_SIGNAL_OK  = rgb565(70, 255, 120);
+// V3_01: Helle Gruenflaeche fuer abgeschlossene Bedienhinweise.
+// Auf dem 128x128-TFT ist ein klarer farbiger Hintergrund besser sichtbar
+// als nur ein gruener Text auf schwarzem Grund.
+static const uint16_t C_SUCCESS_LIGHT = rgb565(170, 255, 190);
 
 // Peak-/Markerfarbe
 static const uint16_t C_PEAK       = ST77XX_CYAN;
@@ -608,7 +612,7 @@ static void drawMainMenuScreen(const char* infoText) {
   tft.fillRect(0, 0, SCREEN_W, 21, C_MENU_BLUE);
   writeText(8, 3, C_TEXT, C_MENU_BLUE, 2, "MENUE");
 
-  drawMenuItem(23, 1, "Ausrichten", C_MENU_BLUE,   sel == 1);
+  drawMenuItem(23, 1, "Grundeinstellung", C_MENU_BLUE,   sel == 1);
   drawMenuItem(42, 2, "Suche",      C_MENU_ORANGE, sel == 2);
   drawMenuItem(61, 3, "Manuell AZ", C_MENU_GREEN,  sel == 3);
   drawMenuItem(80, 4, "Manuell EZ", C_MENU_PURPLE, sel == 4);
@@ -913,18 +917,75 @@ static void drawCenterAlignDynamicRows(const DisplayData& data) {
   writeText(8, 78, C_IDLE, C_BG, 1, ezState);
 }
 
+static int centerAlignVisualStage(const char* infoText) {
+  // V3_01: Der Bildschirm "Grundeinstellung" hat drei klar unterscheidbare
+  // Bedienzustaende, die farblich dargestellt werden sollen:
+  // 0 = Vorbereitung: Nutzer startet die mechanische Centrierung.
+  // 1 = Centrierfahrt laeuft: gelbe Infoflaeche.
+  // 2 = Centrierfahrt fertig: hellgruene Infoflaeche mit naechstem Schritt.
+  const String info = infoText ? String(infoText) : String("");
+
+  if (info.indexOf("Anlage laeuft") >= 0 ||
+      info.indexOf("bitte warten") >= 0 ||
+      info.indexOf("Mitte wird gesucht") >= 0 ||
+      info.indexOf("CENTERDBG|") >= 0) {
+    return 1;
+  }
+
+  if (info.indexOf("Antenne grob nach Sueden") >= 0 ||
+      info.indexOf("Mitte erreicht") >= 0) {
+    return 2;
+  }
+
+  return 0;
+}
+
+static void drawCenterStatusPanel(int stage) {
+  // V3_01: Kompakte Bedieninformation fuer das 128x128-TFT.
+  // Die Zeilen sind absichtlich kurz und ohne Umlaute formuliert, damit sie
+  // sicher in die vorhandene Breite passen.
+  const int x = 4;
+  const int y = 28;
+  const int w = SCREEN_W - 8;
+  const int h = 34;
+
+  if (stage == 1) {
+    tft.fillRect(x, y, w, h, C_WARN_YEL);
+    // V3_01: Kurzer Bedienhinweis fuer den laufenden Prozess.
+    // Der Text ist bewusst allgemein gehalten, damit der Nutzer erkennt:
+    // die Anlage arbeitet gerade und soll nicht manuell gestoppt werden.
+    writeText(8, 38, ST77XX_BLACK, C_WARN_YEL, 1, "ANLAGE LAEUFT");
+    writeText(8, 52, ST77XX_BLACK, C_WARN_YEL, 1, "BITTE WARTEN");
+    return;
+  }
+
+  if (stage == 2) {
+    tft.fillRect(x, y, w, h, C_SUCCESS_LIGHT);
+    writeText(8, 32, ST77XX_BLACK, C_SUCCESS_LIGHT, 1, "ANTENNE GROB");
+    writeText(8, 44, ST77XX_BLACK, C_SUCCESS_LIGHT, 1, "NACH SUEDEN");
+    writeText(8, 56, ST77XX_BLACK, C_SUCCESS_LIGHT, 1, "AUSRICHTEN");
+    return;
+  }
+
+  clearZone(x, y, w, h, C_BG);
+  // V3_01: Startzustand im Menue Grundeinstellung.
+  // MODE kurz startet hier die mechanische Centrierung.
+  writeText(8, 34, C_TEXT, C_BG, 1, "Anlage");
+  writeText(8, 50, C_TEXT, C_BG, 1, "centrieren");
+}
+
 static void drawCenterAlignScreen(const DisplayData& data) {
   tft.fillScreen(C_BG);
 
   String info = data.infoText ? String(data.infoText) : String("");
-  const bool homing = (info.indexOf("CENTERDBG|") >= 0 ||
-                       info.indexOf("Center") >= 0 ||
-                       info.indexOf("Mitte wird gesucht") >= 0);
+  const int centerStage = centerAlignVisualStage(data.infoText);
+  const bool homing = (centerStage == 1);
+  const bool done = (centerStage == 2);
 
   // V3 Outdoor-Kontrast:
-  // Die Mitte-/Ausrichten-Seite bekommt oben eine farbige Statusflaeche.
-  // Laufende Mittenfahrt bleibt orange; erst abgeschlossene Erfolgszustaende
-  // duerfen gruen wirken.
+  // Die Grundeinstellung-Seite bekommt oben eine farbige Statusflaeche.
+  // Die eigentliche Bedieninformation steht darunter in einer eigenen
+  // Statusflaeche: normal, gelb waehrend der Fahrt, hellgruen nach Erfolg.
   tft.fillRect(0, 0, SCREEN_W, 24, C_SEARCH);
   writeText(8, 4, C_TEXT, C_SEARCH, 2, "MITTE");
 
@@ -933,19 +994,15 @@ static void drawCenterAlignScreen(const DisplayData& data) {
     return;
   }
 
-  if (homing) {
-    writeText(8, 32, C_SEARCH, C_BG, 2, "SUCHT");
-    writeText(8, 54, C_TEXT, C_BG, 1, "Mitte laeuft...");
-  } else {
-    writeText(8, 30, C_TEXT, C_BG, 1, "Nach Sueden");
-    writeText(8, 46, C_TEXT, C_BG, 1, "ausrichten");
-  }
-
+  drawCenterStatusPanel(centerStage);
   drawCenterAlignDynamicRows(data);
 
   if (homing) {
-    writeText(8, 90, C_IDLE, C_BG, 1, "Bitte warten");
+    writeText(8, 94, C_IDLE, C_BG, 1, "Bitte warten");
     writeText(8, 108, C_IDLE, C_BG, 1, "MODE lang = Stop");
+  } else if (done) {
+    writeText(8, 94, C_IDLE, C_BG, 1, "fertig");
+    writeText(8, 108, C_IDLE, C_BG, 1, "MODE lang = Menue");
   } else {
     writeText(8, 94, C_IDLE, C_BG, 1, "+/- = EZ kurz");
     writeText(8, 108, C_IDLE, C_BG, 1, "MODE = Mitte");
@@ -1022,23 +1079,28 @@ void displayRender(const DisplayData& data) {
   if (data.mode == UI_MODE_CENTER_ALIGN) {
     static unsigned long lastCenterDynamicUpdateMs = 0;
     static bool lastCenterWasDebug = false;
+    static int lastCenterVisualStage = -1;
     const unsigned long nowMs = millis();
 
     const bool debugActive = centerInfoIsDebug(data.infoText);
+    const int centerVisualStage = centerAlignVisualStage(data.infoText);
 
     // Wichtig gegen Display-Rudimente und Flackern:
     // Der Center-Bildschirm wird nur beim Eintritt in diesen Modus oder beim
-    // Wechsel Vorbereitung <-> laufende Center-Diagnose komplett neu aufgebaut.
-    // Dynamische Texte wie Zeit, Hall C/E/W oder Fehlergrund loesen KEINEN
-    // Vollbild-Redraw mehr aus, sondern werden zeilenweise aktualisiert.
+    // Wechsel Vorbereitung <-> laufende Fahrt <-> Erfolg komplett neu
+    // aufgebaut. Dynamische Texte wie Winkel oder Hallwerte werden danach
+    // zeilenweise aktualisiert. So erscheint die gelbe bzw. gruene
+    // Statusflaeche sofort, ohne das TFT unnoetig flackern zu lassen.
     const bool fullRedraw = firstRender ||
                             data.mode != lastData.mode ||
-                            debugActive != lastCenterWasDebug;
+                            debugActive != lastCenterWasDebug ||
+                            centerVisualStage != lastCenterVisualStage;
 
     if (fullRedraw) {
       drawCenterAlignScreen(data);
       lastCenterDynamicUpdateMs = nowMs;
       lastCenterWasDebug = debugActive;
+      lastCenterVisualStage = centerVisualStage;
     } else {
       const bool statusChanged = String(data.elevationText) != String(lastData.elevationText);
       const bool infoChanged = String(data.infoText) != String(lastData.infoText);

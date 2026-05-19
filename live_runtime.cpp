@@ -449,6 +449,12 @@ namespace {
   uint8_t autoCandidateConfirmCounter = 0;
   unsigned long autoCandidateNextConfirmAtMs = 0;
 
+  // V3_01: Separate Mehrfachbestaetigung fuer RF-Kandidaten waehrend der
+  // AUTO-Centerfahrt. Die Centerfahrt ist eine Referenzfahrt und soll nur bei
+  // stabil sehr gutem Signal stoppen. Ein einzelner kurzer Peak reicht nicht.
+  uint8_t autoCenterRfConfirmCounter = 0;
+  unsigned long autoCenterRfNextConfirmAtMs = 0;
+
   // Ziel-Azimut für das Verlassen eines gesperrten Bereichs.
   int autoResumeTargetAzSteps = 0;
 
@@ -538,8 +544,6 @@ namespace {
   // Sperrbereiche und Astra-Startposition auch ohne echten Encoder nutzbar sind.
   static const int AUTO_ASTRA_OFFSET_STEPS = 10;
   static const unsigned long AUTO_CONTINUOUS_PSEUDO_STEP_MS = 300;
-  static const float AUTO_RF_CANDIDATE_DROP_ADC = 100.0f;
-  static const float AUTO_RF_CANDIDATE_EXIT_ADC = 45.0f;
 
   // V3_01: Die Kandidatenerkennung waehrend der ersten AUTO-Mittenfahrt
   // ist absichtlich strenger als die normale Ost-/West-Suche.
@@ -587,30 +591,22 @@ namespace {
   //
   // Exit-Schwelle:
   //   etwas niedriger als die Enter-Schwelle, damit die Logik nicht flattert.
-  static const float AUTO_RF_DYNAMIC_MIN_ENTER_V = 0.05f;
-  static const float AUTO_RF_DYNAMIC_MIN_EXIT_V  = 0.04f;
-  static const float AUTO_RF_DYNAMIC_ENTER_FACTOR = 1.5f;
-  static const float AUTO_RF_DYNAMIC_EXIT_FACTOR  = 1.2f;
 
   // Kandidat gilt erst dann als stabil, wenn er mehrfach hintereinander
   // oberhalb der Enter-Schwelle bestätigt wurde.
-  static const uint8_t AUTO_CANDIDATE_CONFIRM_COUNT = 3;
-  static const unsigned long AUTO_CANDIDATE_CONFIRM_INTERVAL_MS = 120;
+  // V3_01: Diese Werte gelten auch fuer die sehr strenge Center-RF-Pruefung.
+  // Dadurch stoppt die Centerfahrt erst nach mehreren stabilen Messungen und
+  // nicht mehr durch einen einzelnen kurzen RF-Peak.
 
   // =====================================================
   // Falsche Satelliten / Sperrbereiche
   // =====================================================
   // Ab dieser Verbesserung darf ein Peak überhaupt als speicherbarer
   // falscher Kandidat betrachtet werden.
-  static const float BADSAT_MIN_TRIGGER_V = 0.08f;
 
   // 1) schwach falsch
-  static const float BADSAT_WEAK_MAX_V = 0.15f;
-  static const int   BADSAT_WEAK_RADIUS_STEPS = 3;
 
   // 2) stark falsch
-  static const float BADSAT_STRONG_MAX_V = 0.30f;
-  static const int   BADSAT_STRONG_RADIUS_STEPS = 6;
 
   // 3) sehr stark falsch
   // Noch nicht aktiv benutzt, aber bewusst bereits vorbereitet.
@@ -621,11 +617,9 @@ namespace {
 
   // Sicherheitsabstand, um nach dem Speichern eines falschen Satelliten sicher
   // außerhalb des gesperrten Bereichs wieder einzusetzen.
-  static const int BADSAT_RESUME_MARGIN_STEPS = 2;
 
   // Bereiche, die sich überlappen oder bis auf 3 Schritte annähern,
   // werden zusammengeführt.
-  static const int BADSAT_MERGE_GAP_STEPS = 3;
 
   // =====================================================
   // Kandidatenbedienung
@@ -1237,6 +1231,8 @@ static void resetAutoState() {
   autoCandidateStrengthClass = 0;
   autoCandidateConfirmCounter = 0;
   autoCandidateNextConfirmAtMs = 0;
+  autoCenterRfConfirmCounter = 0;
+  autoCenterRfNextConfirmAtMs = 0;
   autoResumeTargetAzSteps = 0;
   autoCurrentSearchDirection = AUTO_PRESET_DIRECTION;
   autoResumeAfterCandidateState = AUTO_STATE_INACTIVE;
@@ -1943,10 +1939,18 @@ static bool autoServiceRfAndCandidate(AutoState resumeState) {
 static bool autoServiceRfCandidateDuringCenter() {
   // V3_01: Sonderfall waehrend der AUTO-Mittenfahrt.
   // Wenn die Antenne beim Ausrichten nach Sueden zufaellig bereits durch einen
-  // verwertbaren Satelliten laeuft, soll dieser Punkt sofort als Kandidat
-  // angezeigt werden. PLUS beendet dann die Suche erfolgreich. MINUS startet
-  // den Suchablauf bewusst komplett neu: zuerst wieder Mittenfahrt, danach
-  // normaler Ost-/West-Suchlauf.
+  // Satelliten laeuft, soll dieser Punkt nur dann als Kandidat angezeigt
+  // werden, wenn das Signal wirklich sehr gut UND stabil ist.
+  //
+  // Wichtig: Ein einzelner RF-Peak reicht hier bewusst nicht. In der Praxis
+  // kann die Anzeige nach dem Stopp bereits wieder einen deutlich niedrigeren
+  // Wert zeigen, wenn nur eine kurze Spitze ausgewertet wurde. Deshalb wird
+  // eine Mehrfachbestaetigung genutzt:
+  //   - RF% muss ueber AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT liegen
+  //   - DROP_ADC muss ueber AUTO_RF_CANDIDATE_DROP_ADC liegen
+  //   - der Bereich darf nicht durch MINUS als falscher Satellit blockiert sein
+  //   - die Bedingung muss mehrfach im zeitlichen Abstand bestaetigt werden
+  // Erst danach stoppt die Centerfahrt und zeigt den Kandidaten an.
   if (centerOwner != CENTER_OWNER_AUTO) return false;
 
   rfUpdate();
@@ -1966,6 +1970,11 @@ static bool autoServiceRfCandidateDuringCenter() {
   }
 
   const float centerSignalPercent = rfGetSignalPercent();
+  const bool blockedPosition = isBlockedAzPosition(azPositionSteps);
+  const bool centerSignalPercentOk = centerSignalPercent >= AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT;
+  const bool centerSignalDropOk = autoRfDropAdc >= AUTO_RF_CANDIDATE_DROP_ADC;
+  const bool centerSignalStableCandidate = (!blockedPosition && centerSignalPercentOk && centerSignalDropOk);
+  const unsigned long now = millis();
 
   if (millis() - autoLastRfDiagMs >= AUTO_RF_DIAG_INTERVAL_MS) {
     autoLastRfDiagMs = millis();
@@ -1975,14 +1984,24 @@ static bool autoServiceRfCandidateDuringCenter() {
     Serial.print(autoRfDropAdc, 1);
     Serial.print(" | RF%=");
     Serial.print(centerSignalPercent, 0);
+    Serial.print(" | CONFIRM=");
+    Serial.print(autoCenterRfConfirmCounter);
+    Serial.print("/");
+    Serial.print(AUTO_CANDIDATE_CONFIRM_COUNT);
+    Serial.print(" | BLOCK=");
+    Serial.print(blockedPosition ? "JA" : "NEIN");
     Serial.print(" | AZPOS=");
     Serial.println(azPositionSteps);
   }
 
   // Ein bereits mit MINUS verworfener Bereich wird auch waehrend einer neu
   // gestarteten Mittenfahrt ignoriert. Dadurch fuehrt MINUS nicht in eine
-  // Endlosschleife am selben falschen Satelliten.
-  if (isBlockedAzPosition(azPositionSteps)) {
+  // Endlosschleife am selben falschen Satelliten. Gleichzeitig wird der
+  // Bestaetigungszaehler zurueckgesetzt, damit ein Treffer ausserhalb des
+  // Sperrbereichs wieder sauber neu bestaetigt werden muss.
+  if (blockedPosition) {
+    autoCenterRfConfirmCounter = 0;
+    autoCenterRfNextConfirmAtMs = 0;
     return false;
   }
 
@@ -1991,15 +2010,42 @@ static bool autoServiceRfCandidateDuringCenter() {
   // eine Referenz-/Ausrichtbewegung und soll nur bei einem eindeutig guten
   // Satellitensignal stoppen. Normale Ost-/West-Suchfahrten verwenden weiter
   // die empfindlichere AUTO_RF_CANDIDATE_DROP_ADC-Schwelle.
-  if (centerSignalPercent < AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT) {
+  //
+  // Sobald ein Messwert wieder unter eine der beiden Bedingungen faellt, wird
+  // die Mehrfachbestaetigung geloescht. Dadurch koennen kurze Einzelspitzen
+  // den Motor nicht mehr anhalten.
+  if (!centerSignalStableCandidate) {
+    if (autoCenterRfConfirmCounter > 0) {
+      Serial.print("AUTO RF MITTE: Bestaetigung verworfen | RF%=");
+      Serial.print(centerSignalPercent, 0);
+      Serial.print(" | DROP=");
+      Serial.println(autoRfDropAdc, 1);
+    }
+    autoCenterRfConfirmCounter = 0;
+    autoCenterRfNextConfirmAtMs = 0;
     return false;
   }
 
-  // Zusätzliche Sicherheitsbedingung: Der Prozentwert kommt aus der bekannten
-  // Referenzskalierung, der DROP_ADC aus der aktuellen No-Signal-Baseline.
-  // Beide Bedingungen zusammen verhindern, dass ein rechnerisch hoher Prozent-
-  // wert ohne echten Baseline-Abfall die Mittenfahrt stoppt.
-  if (autoRfDropAdc < AUTO_RF_CANDIDATE_DROP_ADC) {
+  // Mehrfachbestaetigung zeitlich entkoppeln: Bei sehr schneller loop()-Rate
+  // wuerden sonst mehrere Zaehlschritte praktisch aus demselben RF-Peak
+  // entstehen. Der Intervallwert liegt zentral in settings.cpp.
+  if (autoCenterRfNextConfirmAtMs == 0 || now >= autoCenterRfNextConfirmAtMs) {
+    if (autoCenterRfConfirmCounter < 255) {
+      autoCenterRfConfirmCounter++;
+    }
+    autoCenterRfNextConfirmAtMs = now + AUTO_CANDIDATE_CONFIRM_INTERVAL_MS;
+
+    Serial.print("AUTO RF MITTE: guter Wert bestaetigt ");
+    Serial.print(autoCenterRfConfirmCounter);
+    Serial.print("/");
+    Serial.print(AUTO_CANDIDATE_CONFIRM_COUNT);
+    Serial.print(" | RF%=");
+    Serial.print(centerSignalPercent, 0);
+    Serial.print(" | DROP=");
+    Serial.println(autoRfDropAdc, 1);
+  }
+
+  if (autoCenterRfConfirmCounter < AUTO_CANDIDATE_CONFIRM_COUNT) {
     return false;
   }
 
@@ -2019,14 +2065,21 @@ static bool autoServiceRfCandidateDuringCenter() {
   centerSearchReverseCount = 0;
   centerOwner = CENTER_OWNER_MENU;
 
+  // Die Bestaetigung ist verbraucht; fuer den naechsten AUTO-Start wieder
+  // sauber bei 0 beginnen.
+  autoCenterRfConfirmCounter = 0;
+  autoCenterRfNextConfirmAtMs = 0;
+
   // Wichtig: Bei MINUS soll der komplette Suchablauf neu starten und nicht
   // nur die aktuelle Teilfahrt fortsetzen. Darum ist der Resume-Zustand hier
   // AUTO_STATE_NEW_CENTER_START.
-  autoStartCandidateHold(AUTO_STATE_NEW_CENTER_START, "CENTER_RF_GOOD");
-  Serial.print("AUTO V3_01: Guter RF-Kandidat waehrend Mittenfahrt erkannt | RF%=");
+  autoStartCandidateHold(AUTO_STATE_NEW_CENTER_START, "CENTER_RF_STABLE_GOOD");
+  Serial.print("AUTO V3_01: Stabiler sehr guter RF-Kandidat waehrend Mittenfahrt erkannt | RF%=");
   Serial.print(centerSignalPercent, 0);
   Serial.print(" | Mindestwert=");
   Serial.print(AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT, 0);
+  Serial.print(" | Bestaetigungen=");
+  Serial.print(AUTO_CANDIDATE_CONFIRM_COUNT);
   Serial.println(" | PLUS=OK, MINUS=Suche neu starten.");
   return true;
 }
@@ -2602,12 +2655,11 @@ const char* liveGetInfoText() {
 
   if (isCenterMode()) {
     if (centerHomingStarted) {
-      // V3: Die fruehere CENTERDBG-Zeile mit Phase/Richtung/Zeit/Hallwerten
-      // wurde bewusst aus der normalen Infoausgabe entfernt. Sie war bei
-      // Ausrichten/Mitte fuer den Anwender nicht hilfreich und hat Web/TFT bzw.
-      // Serial-Ausgaben unnoetig technisch wirken lassen. Die eigentliche
-      // Mittenfahrt-Logik bleibt unveraendert; nur der sichtbare Infotext ist
-      // jetzt bewusst einfach und bedienerfreundlich.
+      // V3_01: Menuepunkt 1 / Grundeinstellung bekommt bewusst klare Bedienanzeigen.
+      // Sobald der Nutzer MODE kurz drueckt und die mechanische Centrierung
+      // wirklich laeuft, meldet die Runtime einen einfachen Bedienstatus.
+      // Das TFT kann daraus eine gelbe Statusflaeche zeichnen.
+      // Die Motorlogik bleibt unveraendert.
       if (centerTimingState == CENTER_TIMING_FAILED) {
         snprintf(infoBuf, sizeof(infoBuf),
                  "INFO: Mitte Fehler%s%s",
@@ -2615,8 +2667,17 @@ const char* liveGetInfoText() {
                  centerLastFailText ? centerLastFailText : "");
         return infoBuf;
       }
-      return "INFO: Mitte wird gesucht";
+      return "INFO: Anlage laeuft bitte warten";
     }
+
+    if (centerSuccessNoticeActive || centerTimingState == CENTER_TIMING_DONE) {
+      // V3_01: Nach erfolgreicher Mittenfahrt bleibt Menuepunkt 1 sichtbar.
+      // Der Bediener bekommt jetzt die naechste praktische Anweisung: Antenne
+      // grob nach Sueden ausrichten. Das Display hebt diesen abgeschlossenen
+      // Zustand hellgruen hervor.
+      return "INFO: Antenne grob nach Sueden ausrichten";
+    }
+
     if (azimuthIsCenterDetected()) return "INFO: Mitte erkannt";
     return "INFO: Nach Sueden ausrichten";
   }
@@ -2959,9 +3020,9 @@ const char* liveGetCenteringInfoText() {
       return "Die Mitte wurde gesetzt. Danach die Antenne grob nach Sueden ausrichten und Suche starten.";
     }
     if (centerTimingState == CENTER_TIMING_FAILED) {
-      return centerLastFailText && centerLastFailText[0] ? centerLastFailText : "Ausrichten wurde nicht erfolgreich beendet.";
+      return centerLastFailText && centerLastFailText[0] ? centerLastFailText : "Grundeinstellung wurde nicht erfolgreich beendet.";
     }
-    return "Bereit zum Ausrichten. Start setzt die mechanische Mitte als Referenz.";
+    return "Bereit zur Grundeinstellung. Start setzt die mechanische Mitte als Referenz.";
   }
 
   switch (centerTimingState) {
@@ -2974,7 +3035,7 @@ const char* liveGetCenteringInfoText() {
     case CENTER_TIMING_RETURN_HALF:
       return "Rueckfahrt in die berechnete Mitte.";
     case CENTER_TIMING_FAILED:
-      return centerLastFailText && centerLastFailText[0] ? centerLastFailText : "Ausrichten wurde nicht erfolgreich beendet.";
+      return centerLastFailText && centerLastFailText[0] ? centerLastFailText : "Grundeinstellung wurde nicht erfolgreich beendet.";
     case CENTER_TIMING_DONE:
       return "Die Mitte wurde gesetzt.";
     case CENTER_TIMING_IDLE:
@@ -3440,7 +3501,13 @@ static void centerTimingDone() {
   }
 
   centerSuccessNoticeActive = true;
-  enterMainMenuMode();
+
+  // V3_01: Nach einer manuellen Mittenfahrt bleiben wir bewusst im
+  // Ausrichten-Menue. Dadurch kann das TFT direkt an derselben Stelle von der
+  // gelben Laufmeldung auf die hellgruene Abschlussmeldung wechseln:
+  // "Antenne grob nach Sueden ausrichten". Der Nutzer verlaesst den Dialog
+  // weiterhin wie gewohnt mit MODE lang ins Hauptmenue.
+  enterCenterMode();
   Serial.println("MITTE: Center-Bereich vermessen, halbe Zeit zurueck, Mitte gesetzt.");
 }
 
@@ -3868,6 +3935,15 @@ static void processButtonLogic() {
 
     if (btnMode.releaseEvent && !modeLongHandled) {
       stopCenterElevationAdjust();
+
+      // V3_01: Wenn die Mittenfahrt bereits erfolgreich abgeschlossen ist,
+      // startet MODE kurz sie nicht versehentlich erneut. Die gruene
+      // Abschlussmeldung bleibt stehen, bis der Nutzer die Antenne grob nach
+      // Sueden ausgerichtet hat und mit MODE lang ins Hauptmenue zurueckgeht.
+      if (centerSuccessNoticeActive || centerTimingState == CENTER_TIMING_DONE) {
+        return;
+      }
+
       if (!centerHomingStarted) {
         startCenterHomingFromAlignMode();
       }

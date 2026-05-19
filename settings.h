@@ -57,6 +57,33 @@ extern float RF_TV_STRONG_MAX_ADC;
 // die Centerfahrt stoppen. 0 % = schwach/kein Signal, 100 % = sehr gut.
 extern float AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT;
 
+// V3_01: Zentrale RF-Referenz- und AUTO-Schwellwerte.
+// Definition und Defaultwerte liegen in settings.cpp.
+// Diese Werte koennen bei Aussentests manuell angepasst werden, ohne
+// live_runtime.cpp oder rf_detector.cpp durchsuchen zu muessen.
+extern float RF_WEAK_REFERENCE_ADC;
+extern float RF_STRONG_REFERENCE_ADC;
+extern float RF_VALID_DROP_ADC;
+
+extern float AUTO_RF_CANDIDATE_DROP_ADC;
+extern float AUTO_RF_CANDIDATE_EXIT_ADC;
+
+extern float AUTO_RF_DYNAMIC_MIN_ENTER_V;
+extern float AUTO_RF_DYNAMIC_MIN_EXIT_V;
+extern float AUTO_RF_DYNAMIC_ENTER_FACTOR;
+extern float AUTO_RF_DYNAMIC_EXIT_FACTOR;
+
+extern int AUTO_CANDIDATE_CONFIRM_COUNT;
+extern unsigned long AUTO_CANDIDATE_CONFIRM_INTERVAL_MS;
+
+extern float BADSAT_MIN_TRIGGER_V;
+extern float BADSAT_WEAK_MAX_V;
+extern int   BADSAT_WEAK_RADIUS_STEPS;
+extern float BADSAT_STRONG_MAX_V;
+extern int   BADSAT_STRONG_RADIUS_STEPS;
+extern int   BADSAT_RESUME_MARGIN_STEPS;
+extern int   BADSAT_MERGE_GAP_STEPS;
+
 
 // V3: Reservierte Altwerte der entfernten Signaloptimierung.
 // Definition und Defaultwerte liegen in settings.cpp.
