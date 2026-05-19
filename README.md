@@ -271,15 +271,24 @@ Additional documentation can be placed in `docs/`.
 
 ---
 
-## Disclaimer and safety notice
+## Safety notes
 
-SatAlign ESP32 V3 is a private DIY and experimental project. It is not a certified product, not a commercial antenna control system, and not a ready-to-use kit.
+This is a DIY project. Use it at your own risk.
 
-The system controls moving mechanical parts and uses custom electronics, RF signal detection, DiSEqC motor movement, an elevation actuator, sensors, and individually built mechanical components. Incorrect wiring, missing movement limits, wrong motor direction, unstable mounting, or improper separation of RF signal and LNB supply voltage can damage hardware or create unsafe operating conditions.
+Before operating the system, check carefully:
 
-Use this project entirely at your own risk. Before operating the system, carefully verify wiring, polarity, motor direction, mechanical limits, DC blocker placement, sensor function, and the stability of the complete antenna structure.
+- motor direction
+- DiSEqC motor behavior
+- elevation actuator limits
+- Hall sensor states
+- RF detector wiring
+- DC blocker placement
+- LNB voltage path
+- mechanical end stops
+- power supply stability
+- all cables and connectors
 
-The author provides this project for educational and experimental purposes only and gives no warranty regarding safety, reliability, completeness, suitability, or compatibility with any specific hardware setup. The author is not liable for any damage, injury, loss, or other consequences resulting from building, modifying, installing, or operating this project.
+Never connect the RF detector directly to a path that may carry LNB supply voltage without proper protection.
 
 ---
 
@@ -297,15 +306,11 @@ Possible future improvements:
 
 ---
 
-## License
+## License and reuse
 
-This project is released under the MIT License.
+This is a personal open DIY project. You are welcome to study, modify, adapt and improve the code for your own experiments and setups.
 
-You are welcome to study, use, modify, and improve the project for your own experiments and setups. Contributions, ideas, improvements, and adaptations are welcome.
-
-Please keep in mind that SatAlign ESP32 V3 is a private DIY and experimental project. The license allows reuse of the software, but it does not provide any warranty or guarantee for safe operation, mechanical reliability, electrical safety, RF performance, or suitability for a specific antenna setup.
-
-See the `LICENSE` file for the full license text.
+No warranty is provided. The author is not responsible for damage caused by wiring errors, incorrect RF connections, mechanical movement, motor control issues or unsafe operation.
 
 ---
 
