@@ -19,7 +19,7 @@ enum UiMode {
   // Hauptmenue nach dem Boot, keine automatische Bewegung
   UI_MODE_MENU = 0,
 
-  // Menuepunkt 1: Nach Sueden ausrichten / Ausrichten / Mitte referenzieren
+  // Menuepunkt 1: Nach Sueden ausrichten / Grundeinstellung / Mitte referenzieren
   UI_MODE_CENTER_ALIGN,
 
   // Manueller Betriebszustand, ruhig / bedienbereit
@@ -53,14 +53,11 @@ struct DisplayData {
   // ---------------------------------------------------
 
   // Aktuelle gemessene RF-Spannung am ADC-Pfad.
-  // V3_01: Dieser Wert bleibt intern verfuegbar, wird auf dem TFT aber
-  // nicht mehr direkt angezeigt. Sichtbar ist stattdessen der aus
-  // signalNorm abgeleitete Prozentwert.
+  // Beispiel: 2.41 V
   float signalVolts;
 
   // Normierter aktueller Signalwert 0.0 ... 1.0
-  // fuer Prozentanzeige, Balken und farbliche Bewertung.
-  // Wichtig: 1.0 = starkes Signal, 0.0 = schwaches/kein Signal.
+  // für Balken und farbliche Bewertung.
   float signalNorm;
 
   // Bester bisher beobachteter normierter Signalwert.
@@ -121,9 +118,11 @@ void displayShowSplash();
 // Zeigt das Ergebnis des MPU6050-/GY-521-Boottests kurz auf dem TFT an.
 void displayShowMpuBootTestResult(bool ok, float relativeAngleDeg);
 
-// V3: Dauerhafte Boot-Sperranzeige, wenn der MPU6050/GY-521 fehlt oder
-// nicht initialisiert werden konnte. Diese Anzeige passt bewusst auf 128x128
-// und bleibt stehen, bis die Anlage stromlos gemacht und neu gestartet wird.
+// V3_01 Cleanup: Dauerhafte Fatal-Fehleranzeige fuer den Fall, dass
+// der MPU6050/GY-521 beim Boot nicht erkannt oder nicht initialisiert wird.
+// Diese Funktion wird direkt aus SatAlign_ESP32_V3.ino aufgerufen, bevor
+// WLAN/OTA/Webserver gestartet werden. Daher muss sie im Header deklariert
+// bleiben, auch wenn die Anzeige selbst in display_ui.cpp implementiert ist.
 void displayShowMpuFatalBootError();
 
 // V3: Die frueheren Boot-EZ-Startanzeigen wurden entfernt.
@@ -138,7 +137,7 @@ void displayShowSouthAlignPrompt();
 // Zeichnet die obere Mode-Leiste.
 void drawModeBar(UiMode mode);
 
-// Zeichnet den Signalbereich inkl. Prozentwert, Balken und Status.
+// Zeichnet den Signalbereich inkl. Balken, Spannung und Status.
 void drawSignalBlock(float volts, float norm, float bestNorm, const char* signalText);
 
 // Zeichnet die Elevationszeile.

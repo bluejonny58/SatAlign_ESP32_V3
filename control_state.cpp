@@ -1,7 +1,7 @@
 /*
   SatAlign ESP32 - control_state.cpp
   ---------------------------------------------------------------------------
-  Verwaltet den groben Betriebsmodus des Systems: Hauptmenue, Ausrichten,
+  Verwaltet den groben Betriebsmodus des Systems: Hauptmenue, Grundeinstellung,
   AUTO und Manuell. Die Detailzustandsmaschine liegt in live_runtime.cpp.
 */
 #include <Arduino.h>
@@ -27,7 +27,7 @@ void enterMainMenuMode() {
   controlMode = CONTROL_MAIN_MENU;
 }
 
-// Schaltet das System in den Modus fuer Menuepunkt 1: Ausrichten / Mitte referenzieren.
+// Schaltet das System in den Modus fuer Menuepunkt 1: Grundeinstellung / Mitte referenzieren.
 void enterCenterMode() {
   controlMode = CONTROL_CENTER;
 }

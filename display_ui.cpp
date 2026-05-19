@@ -987,7 +987,7 @@ static void drawCenterAlignScreen(const DisplayData& data) {
   // Die eigentliche Bedieninformation steht darunter in einer eigenen
   // Statusflaeche: normal, gelb waehrend der Fahrt, hellgruen nach Erfolg.
   tft.fillRect(0, 0, SCREEN_W, 24, C_SEARCH);
-  writeText(8, 4, C_TEXT, C_SEARCH, 2, "MITTE");
+  writeText(8, 4, C_TEXT, C_SEARCH, 2, "GRUND");
 
   if (info.indexOf("CENTERDBG|") >= 0) {
     drawCenterDebugRows(data);

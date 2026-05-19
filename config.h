@@ -211,7 +211,6 @@ extern float RF_TV_USABLE_MAX_ADC;
 extern float RF_TV_GOOD_MAX_ADC;
 extern float RF_TV_STRONG_MAX_ADC;
 // -----------------------------------------------------
-// Reservierte Altwerte der entfernten Signaloptimierung
 // -----------------------------------------------------
 // Kommentarstand: V3
 // Diese Werte bleiben nur als reservierte Altwerte im Code, weil die
@@ -219,14 +218,5 @@ extern float RF_TV_STRONG_MAX_ADC;
 // PLUS bestaetigt aktuell nur den Kandidaten und laesst die Anlage an der
 // geprueften Position stehen. Die Werte koennen spaeter geloescht oder fuer
 // eine neu geplante Optimierung bewusst wiederverwendet werden.
-extern unsigned long SIGNAL_OPT_AZ_STEP_MS;
-extern unsigned long SIGNAL_OPT_AZ_SETTLE_MS;
-extern unsigned long SIGNAL_OPT_EL_STEP_MS;
-extern unsigned long SIGNAL_OPT_EL_SETTLE_MS;
-extern float SIGNAL_OPT_RF_IMPROVE_ADC;
-extern float SIGNAL_OPT_RF_WORSE_ADC;
-extern float SIGNAL_OPT_RETURN_EL_TOLERANCE_DEG;
 // V3: Primaere AZ-Grenze ist der Ost-/West-Hallsensor.
 // Die folgende maximale AZ-Schrittzahl ist nur ein Sicherheitslimit.
-extern int SIGNAL_OPT_AZ_MAX_STEPS_PER_DIR;
-extern int SIGNAL_OPT_EL_MAX_STEPS_PER_DIR;

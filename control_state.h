@@ -51,7 +51,7 @@ bool isAutoAllowed();
 // In diesem Zustand laufen keine manuellen Motorbefehle.
 void enterMainMenuMode();
 
-// Schaltet das System in den speziellen Modus "Ausrichten / Mitte referenzieren".
+// Schaltet das System in den speziellen Modus "Grundeinstellung / Mitte referenzieren".
 // In diesem Modus laeuft nur die Referenzfahrt zur Mitte.
 void enterCenterMode();
 

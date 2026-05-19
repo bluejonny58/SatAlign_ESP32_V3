@@ -2,7 +2,7 @@
   SatAlign V3 - Runtime und Zustandsmaschine
   ------------------------------------------------------------
   Dieses Modul enthaelt die fachliche Ablaufsteuerung:
-  - Hauptmenue, Ausrichten/Mitte, Suchen, Manuell
+  - Hauptmenue, Grundeinstellung, Suchen, Manuell
   - Kandidatenentscheidung PLUS/MINUS
   - PLUS bestaetigt Kandidaten; automatische Optimierung ist deaktiviert
   - Live-Status fuer Web-UI und TFT
@@ -18,7 +18,7 @@
   Zentrale Laufzeitlogik des Projekts. Diese Datei verbindet:
 
   - 3-Tasten-Bedienung am Geraet
-  - Hauptmenue / Ausrichten / AUTO / manuelle Steuerung
+  - Hauptmenue / Grundeinstellung / AUTO / manuelle Steuerung
   - aktuelle AUTO-Suchstrategie von V3 - Kandidatenentscheidung PLUS = OK, MINUS = falsch, MODE lang = Abbruch
   - Runtime-Status fuer TFT, Serial Monitor und Web-UI
 
@@ -76,7 +76,7 @@ namespace {
   // Hauptmenue-Auswahl
   // =====================================================
   // Das Hauptmenue hat fuenf feste Punkte:
-  // 1 = Ausrichten: Nach Sueden grob ausrichten, Elevation mit +/- korrigieren,
+  // 1 = Grundeinstellung: Anlage centrieren, Elevation mit +/- korrigieren,
   //     MODE startet danach die getestete Mitten-/Referenzfahrt.
   // 2 = Automatik starten
   // 3 = manuelle Azimutsteuerung
@@ -103,7 +103,7 @@ namespace {
   // Der Reset wird erst mit MODE ausgefuehrt; PLUS/MINUS schalten nur die Auswahl um.
   bool tftInfoResetSelected = false;
 
-  // Im Menuepunkt 1 wird zuerst nur die Ausrichtung vorbereitet.
+  // Im Menuepunkt 1 wird zuerst nur die Grundeinstellung vorbereitet.
   // Die eigentliche Azimut-Referenzfahrt startet erst mit MODE.
   bool centerHomingStarted = false;
 
@@ -180,8 +180,8 @@ namespace {
   // Diagnoseanzeige fuer die AZ-Mittenfahrt.
   // Wird nur angezeigt/ausgegeben; aendert keine Fahrentscheidung.
   const char* centerLastFailText = "";
-  // Wird fuer die Web-UI gesetzt, wenn die Ausrichten-/Mittenfahrt
-  // erfolgreich aus dem Ausrichten-Menue beendet wurde.
+  // Wird fuer die Web-UI gesetzt, wenn die Grundeinstellung-/Mittenfahrt
+  // erfolgreich aus dem Grundeinstellung-Menue beendet wurde.
   // Dadurch kann die Web-UI nach Abschluss eine klare Erfolgsmeldung anzeigen.
   bool centerSuccessNoticeActive = false;
 
@@ -243,27 +243,6 @@ namespace {
     AUTO_STATE_NEW_CHANGE_ELEVATION_START,   // Altzustand bleibt aus Kompatibilitaet, wird in V3 nicht mehr aktiv genutzt.
     AUTO_STATE_NEW_CHANGE_ELEVATION_WAIT,    // Altzustand bleibt aus Kompatibilitaet, wird in V3 nicht mehr aktiv genutzt.
     AUTO_STATE_EZ_ADJUST_HINT,               // V3: Mitte erreicht, Hoehe manuell pruefen und Suchlauf ggf. wiederholen.
-
-    // V3: Reservierte Altzustände der entfernten Signaloptimierung.
-    // Diese Zustaende werden in der aktuellen Bedienlinie nicht mehr gestartet.
-    // PLUS bestaetigt den Kandidaten und laesst die Anlage an der geprueften
-    // Position stehen. Die Altzustaende bleiben nur noch als sicherer
-    // Compile-/Fallback-Rahmen bestehen.
-    AUTO_STATE_SIGNAL_OPT_AZ_EAST_START,
-    AUTO_STATE_SIGNAL_OPT_AZ_EAST_WAIT,
-    AUTO_STATE_SIGNAL_OPT_AZ_WEST_START,
-    AUTO_STATE_SIGNAL_OPT_AZ_WEST_WAIT,
-    AUTO_STATE_SIGNAL_OPT_EL_UP_START,
-    AUTO_STATE_SIGNAL_OPT_EL_UP_WAIT,
-    AUTO_STATE_SIGNAL_OPT_EL_DOWN_START,
-    AUTO_STATE_SIGNAL_OPT_EL_DOWN_WAIT,
-
-    // V3: Reservierte Rueckfahrzustaende der entfernten Optimierung.
-    // Sie werden aktuell nicht mehr angesteuert.
-    AUTO_STATE_SIGNAL_OPT_RETURN_AZ_START,
-    AUTO_STATE_SIGNAL_OPT_RETURN_AZ_WAIT,
-    AUTO_STATE_SIGNAL_OPT_RETURN_EL_START,
-    AUTO_STATE_SIGNAL_OPT_RETURN_EL_WAIT,
 
     AUTO_STATE_COMPLETE,
     AUTO_STATE_FAILED
@@ -492,33 +471,14 @@ namespace {
   int autoCycleIndex = 0;
 
   // =====================================================
-  // Reservierte Altwerte der entfernten Signaloptimierung
+  // Signaloptimierung entfernt
   // =====================================================
-  // Kommentarstand: V3
+  // Kommentarstand: V3_01
   //
-  // Die automatische Optimierung nach PLUS wurde nach dem Live-Test aus der
-  // Bedienung entfernt. PLUS bestaetigt aktuell den Kandidaten und behaelt
-  // die vom Nutzer gepruefte Position. Diese Variablen bleiben nur noch als
-  // interner Alt-/Fallback-Rahmen bestehen, damit spaeter eine neue, bewusst
-  // geplante Optimierung auf bekannten Namen aufbauen koennte.
-  float signalOptBestAdc = 4095.0f;
-  float signalOptLastAdc = 4095.0f;
-  float signalOptStartAdc = 4095.0f;
-
-  // V3: Sicherer Ausgangspunkt der PLUS-Bestaetigung.
-  // Dieser Punkt hat vom Nutzer bereits ein TV-Bild bzw. den richtigen
-  // Satelliten erhalten. Die Optimierung darf diesen Punkt daher nicht
-  // dauerhaft verlieren. Wenn keine eindeutige Verbesserung gefunden wird,
-  // faehrt die Anlage am Ende wieder hierher zurueck.
-  int signalOptHomeAzSteps = 0;
-  float signalOptHomeElevationDeg = 0.0f;
-
-  int signalOptBestAzSteps = 0;
-  float signalOptBestElevationDeg = 0.0f;
-  uint8_t signalOptStepsInPhase = 0;
-  unsigned long signalOptStepStartedAtMs = 0;
-  unsigned long signalOptLastDiagMs = 0;
-
+  // Die fruehere automatische Signaloptimierung nach PLUS ist in dieser
+  // Projektlinie bewusst entfernt. PLUS bedeutet jetzt: Der Nutzer hat den
+  // richtigen Satelliten per TV-Bild bestaetigt; die Anlage bleibt an dieser
+  // Position stehen und zeigt das gruene Abschlussfenster.
 
   // Hilfsobjekte
   StepTask autoMoveTask;
@@ -1252,15 +1212,6 @@ static void resetAutoState() {
   autoCandidateAdc = 0.0f;
   autoCycleIndex = 0;
 
-  signalOptBestAdc = 4095.0f;
-  signalOptLastAdc = 4095.0f;
-  signalOptStartAdc = 4095.0f;
-  signalOptBestAzSteps = 0;
-  signalOptBestElevationDeg = 0.0f;
-  signalOptStepsInPhase = 0;
-  signalOptStepStartedAtMs = 0;
-  signalOptLastDiagMs = 0;
-
   clearModeMultiClick();
 
   clearStepTask(autoMoveTask);
@@ -1576,241 +1527,13 @@ static void autoStopAzDrive() {
 
 
 // =====================================================
-// Signaloptimierung nach PLUS-Bestaetigung
+// AUTO-Azimut-Positionsservice
 // =====================================================
-// Kommentarstand: V3
+// Kommentarstand: V3_01
 //
-// Grundidee:
-// Die eigentliche Suche findet nur einen RF-Kandidaten. Der Nutzer entscheidet
-// mit PLUS, dass dieser Kandidat der richtige Satellit ist. Erst danach darf
-// die Anlage aktiv nach dem lokalen Signalmaximum suchen.
-//
-// Wichtig zum AD8317/AD8318-Aufbau:
-// Ein kleinerer RF-ADC-Wert bedeutet staerkeres Signal. Die Optimierung sucht
-// daher ein lokales RF-Minimum, kein numerisches Maximum.
-//
-// V3 nach Aussentest:
-// Die Optimierung arbeitet konservativ. Der durch PLUS bestaetigte Punkt wird
-// als sichere Ausgangsposition gespeichert. Nur eine eindeutig bessere, stabile
-// RF-Messung darf als neuer Bestpunkt gelten. Am Ende faehrt die Anlage zur
-// besten gespeicherten Position zurueck. Wenn keine klare Verbesserung gefunden
-// wurde, bleibt bzw. endet sie wieder an der urspruenglichen PLUS-Position.
-//
-// Die Schrittweiten und Schwellen liegen bewusst in settings.cpp:
-// - SIGNAL_OPT_AZ_STEP_MS
-// - SIGNAL_OPT_EL_STEP_MS
-// - SIGNAL_OPT_RF_IMPROVE_ADC
-// - SIGNAL_OPT_RF_WORSE_ADC
-// So koennen die Werte nach Aussentests angepasst werden, ohne die Logik zu
-// suchen oder NVS/Preferences zu verwenden.
-static void signalOptResetFromCurrent() {
-  autoStopAzDrive();
-  elevationStop();
-  rfUpdate();
-
-  const float adc = rfGetFilteredAdc();
-  signalOptStartAdc = adc;
-  signalOptLastAdc = adc;
-  signalOptBestAdc = adc;
-  signalOptHomeAzSteps = azPositionSteps;
-  signalOptHomeElevationDeg = currentRelativeAngle();
-  signalOptBestAzSteps = signalOptHomeAzSteps;
-  signalOptBestElevationDeg = signalOptHomeElevationDeg;
-  signalOptStepsInPhase = 0;
-  signalOptStepStartedAtMs = 0;
-  signalOptLastDiagMs = 0;
-
-  Serial.print("SIGNAL OPT V3: Start | ADC=");
-  Serial.print(adc, 1);
-  Serial.print(" | AZ=");
-  Serial.print(signalOptBestAzSteps);
-  Serial.print(" | Winkel=");
-  Serial.println(signalOptBestElevationDeg, 2);
-}
-
-static void signalOptUpdateBest(float adc) {
-  // V3: Konservative Bewertung nach Live-Test.
-  // Frueher wurde bereits jede minimale RF-Verbesserung als neuer Bestpunkt
-  // gespeichert. Das kann dazu fuehren, dass die Anlage vom bestaetigten
-  // TV-Punkt wegfaehrt, obwohl die Verbesserung nur Rauschen oder ein anderer
-  // RF-Peak ist. Jetzt wird ein neuer Bestpunkt nur uebernommen, wenn der
-  // ADC-Wert mindestens SIGNAL_OPT_RF_IMPROVE_ADC besser ist.
-  if (adc <= signalOptBestAdc - SIGNAL_OPT_RF_IMPROVE_ADC) {
-    signalOptBestAdc = adc;
-    signalOptBestAzSteps = azPositionSteps;
-    signalOptBestElevationDeg = currentRelativeAngle();
-    Serial.print("SIGNAL OPT V3: neuer stabiler Bestpunkt | ADC=");
-    Serial.print(signalOptBestAdc, 1);
-    Serial.print(" | AZ=");
-    Serial.print(signalOptBestAzSteps);
-    Serial.print(" | Winkel=");
-    Serial.println(signalOptBestElevationDeg, 2);
-  }
-  signalOptLastAdc = adc;
-
-  if (millis() - signalOptLastDiagMs >= AUTO_RF_DIAG_INTERVAL_MS) {
-    signalOptLastDiagMs = millis();
-    Serial.print("SIGNAL OPT V3 | ADC=");
-    Serial.print(adc, 1);
-    Serial.print(" | BEST=");
-    Serial.print(signalOptBestAdc, 1);
-    Serial.print(" | AZ=");
-    Serial.print(azPositionSteps);
-    Serial.print(" | Winkel=");
-    Serial.println(currentRelativeAngle(), 2);
-  }
-}
-
-static bool signalOptIsClearlyWorse(float adc) {
-  return adc >= signalOptBestAdc + SIGNAL_OPT_RF_WORSE_ADC;
-}
-
-// V3: Prueft die echte logische AZ-Grenze fuer die aktuelle
-// Optimierungsrichtung. Fuer die Signaloptimierung sind die Ost-/West-
-// Hallsensoren die primaere Begrenzung. Die Schrittanzahl bleibt nur als
-// Sicherheitsnetz, falls ein Sensor nicht ausloest oder ein Testlauf aus
-// anderen Gruenden zu lange in einer Richtung weiterlaufen wuerde.
-static bool signalOptAzLimitReached(AzimuthDirection dir) {
-  if (dir == AZ_DIR_EAST) return azimuthIsEastLimitDetected();
-  if (dir == AZ_DIR_WEST) return azimuthIsWestLimitDetected();
-  return true;
-}
-
-static const char* signalOptAzLimitText(AzimuthDirection dir) {
-  if (dir == AZ_DIR_EAST) return "OST-SENSOR";
-  if (dir == AZ_DIR_WEST) return "WEST-SENSOR";
-  return "UNBEKANNT";
-}
-
-static bool signalOptIssueAzStep(AzimuthDirection dir) {
-  // V3: Primaere Grenze der AZ-Optimierung ist der jeweilige
-  // Ost-/West-Hallsensor. Dadurch richtet sich die Optimierung nach der
-  // realen Mechanik und nicht nur nach einer theoretischen Zeit oder
-  // Schrittanzahl.
-  if (signalOptAzLimitReached(dir)) {
-    Serial.print("SIGNAL OPT V3: AZ Grenze erreicht | ");
-    Serial.print(signalOptAzLimitText(dir));
-    Serial.print(" | DIR=");
-    Serial.println(dirText(dir));
-    return false;
-  }
-
-  // V3: Die maximale Schrittzahl bleibt bewusst nur als zweite
-  // Sicherheitsgrenze. Normalerweise beendet der Hall-Sensor die Richtung.
-  if (signalOptStepsInPhase >= (uint8_t)max(0, SIGNAL_OPT_AZ_MAX_STEPS_PER_DIR)) {
-    Serial.print("SIGNAL OPT V3: AZ Sicherheitslimit Schritte erreicht | DIR=");
-    Serial.println(dirText(dir));
-    return false;
-  }
-
-  if (!canMoveAzimuth(dir)) {
-    Serial.print("SIGNAL OPT V3: AZ Schritt blockiert | DIR=");
-    Serial.println(dirText(dir));
-    return false;
-  }
-
-  issueAzimuthPulse(dir, SIGNAL_OPT_AZ_STEP_MS);
-  applyAzStepFromDir(dir);
-  signalOptStepsInPhase++;
-  signalOptStepStartedAtMs = millis();
-  return true;
-}
-
-static bool signalOptIssueElevationStep(ElevationDirection dir) {
-  if (signalOptStepsInPhase >= (uint8_t)max(0, SIGNAL_OPT_EL_MAX_STEPS_PER_DIR)) {
-    return false;
-  }
-
-  if (dir == EL_DIR_UP) {
-    if (!canMoveElevationUp()) return false;
-    elevationPulseUp(SIGNAL_OPT_EL_STEP_MS, WEB_EL_PWM);
-    manualElDirection = EL_DIR_UP;
-  } else if (dir == EL_DIR_DOWN) {
-    if (!canMoveElevationDown()) return false;
-    elevationPulseDown(SIGNAL_OPT_EL_STEP_MS, WEB_EL_PWM);
-    manualElDirection = EL_DIR_DOWN;
-  } else {
-    return false;
-  }
-
-  signalOptStepsInPhase++;
-  signalOptStepStartedAtMs = millis();
-  return true;
-}
-
-static void signalOptStartAzEastPhase() {
-  signalOptStepsInPhase = 0;
-  signalOptStepStartedAtMs = 0;
-  autoState = AUTO_STATE_SIGNAL_OPT_AZ_EAST_START;
-  Serial.println("SIGNAL OPT V3: Phase AZ Richtung Osten.");
-}
-
-static void signalOptStartAzWestPhase() {
-  signalOptStepsInPhase = 0;
-  signalOptStepStartedAtMs = 0;
-  autoState = AUTO_STATE_SIGNAL_OPT_AZ_WEST_START;
-  Serial.println("SIGNAL OPT V3: Phase AZ Richtung Westen.");
-}
-
-static void signalOptStartElUpPhase() {
-  signalOptStepsInPhase = 0;
-  signalOptStepStartedAtMs = 0;
-  autoState = AUTO_STATE_SIGNAL_OPT_EL_UP_START;
-  Serial.println("SIGNAL OPT V3: Phase Winkel hoch.");
-}
-
-static void signalOptStartElDownPhase() {
-  signalOptStepsInPhase = 0;
-  signalOptStepStartedAtMs = 0;
-  autoState = AUTO_STATE_SIGNAL_OPT_EL_DOWN_START;
-  Serial.println("SIGNAL OPT V3: Phase Winkel runter.");
-}
-
-static void signalOptStartReturnToBest() {
-  autoStopAzDrive();
-  elevationStop();
-  manualElDirection = EL_DIR_STOP;
-
-  Serial.print("SIGNAL OPT V3: Tests fertig, Rueckfahrt zum besten sicheren Punkt | BEST_ADC=");
-  Serial.print(signalOptBestAdc, 1);
-  Serial.print(" | BEST_AZ=");
-  Serial.print(signalOptBestAzSteps);
-  Serial.print(" | BEST_WINKEL=");
-  Serial.print(signalOptBestElevationDeg, 2);
-  Serial.print(" | START_ADC=");
-  Serial.println(signalOptStartAdc, 1);
-
-  autoState = AUTO_STATE_SIGNAL_OPT_RETURN_AZ_START;
-}
-
-static void signalOptCompleteAtBest() {
-  autoStopAzDrive();
-  elevationStop();
-  manualElDirection = EL_DIR_STOP;
-  autoHasPeak = true;
-  autoState = AUTO_STATE_COMPLETE;
-
-  Serial.print("SIGNAL OPT V3: Abgeschlossen an bester Position | BEST_ADC=");
-  Serial.print(signalOptBestAdc, 1);
-  Serial.print(" | AZ=");
-  Serial.print(azPositionSteps);
-  Serial.print(" | Winkel=");
-  Serial.println(currentRelativeAngle(), 2);
-}
-
-static void signalOptFinish() {
-  // V3: Nicht an der letzten Testposition stehen bleiben.
-  // Der Aussentest hat gezeigt, dass die Optimierung sonst den bestaetigten
-  // TV-Punkt verlieren kann. Daher wird am Ende immer zur besten gespeicherten
-  // Position zurueckgefahren. Ohne klare Verbesserung ist das die PLUS-
-  // Ausgangsposition.
-  signalOptStartReturnToBest();
-}
-
-static void signalOptStartFromCandidate() {
-  signalOptResetFromCurrent();
-  signalOptStartAzEastPhase();
-}
+// Die fruehere automatische Signaloptimierung nach PLUS wurde im Cleanup
+// entfernt. Der Suchablauf verwendet weiterhin diese AZ-Positionshilfe fuer
+// normale Such- und Resume-Fahrten.
 
 static void autoServiceAzPosition() {
   if (autoDriveDir == AZ_DIR_NONE) return;
@@ -1938,7 +1661,7 @@ static bool autoServiceRfAndCandidate(AutoState resumeState) {
 
 static bool autoServiceRfCandidateDuringCenter() {
   // V3_01: Sonderfall waehrend der AUTO-Mittenfahrt.
-  // Wenn die Antenne beim Ausrichten nach Sueden zufaellig bereits durch einen
+  // Wenn die Antenne waehrend der AUTO-Mittenfahrt zufaellig bereits durch einen
   // Satelliten laeuft, soll dieser Punkt nur dann als Kandidat angezeigt
   // werden, wenn das Signal wirklich sehr gut UND stabil ist.
   //
@@ -2271,149 +1994,8 @@ static void updateAutoStrategy() {
       return;
 
     // -------------------------------------------------
-    // Reservierte Altzustaende der entfernten Signaloptimierung
+    // Abschluss / Fehler
     // -------------------------------------------------
-    case AUTO_STATE_SIGNAL_OPT_AZ_EAST_START:
-      if (!signalOptIssueAzStep(AZ_DIR_EAST)) {
-        signalOptStartAzWestPhase();
-        return;
-      }
-      autoState = AUTO_STATE_SIGNAL_OPT_AZ_EAST_WAIT;
-      return;
-
-    case AUTO_STATE_SIGNAL_OPT_AZ_EAST_WAIT:
-      if (azimuthIsPulseActive()) return;
-      if (millis() - signalOptStepStartedAtMs < SIGNAL_OPT_AZ_SETTLE_MS) return;
-      rfUpdate();
-      signalOptUpdateBest(rfGetFilteredAdc());
-      // V3: Nach jedem AZ-Schritt erneut den Ost-Hallsensor pruefen.
-      // Wenn die echte mechanische Ost-Grenze erreicht ist, wird diese
-      // Richtung beendet und nicht weiter ueber Zeit/Schritte erzwungen.
-      if (signalOptAzLimitReached(AZ_DIR_EAST)) {
-        signalOptStartAzWestPhase();
-        return;
-      }
-      if (signalOptIsClearlyWorse(rfGetFilteredAdc())) {
-        signalOptStartAzWestPhase();
-        return;
-      }
-      autoState = AUTO_STATE_SIGNAL_OPT_AZ_EAST_START;
-      return;
-
-    case AUTO_STATE_SIGNAL_OPT_AZ_WEST_START:
-      if (!signalOptIssueAzStep(AZ_DIR_WEST)) {
-        signalOptStartElUpPhase();
-        return;
-      }
-      autoState = AUTO_STATE_SIGNAL_OPT_AZ_WEST_WAIT;
-      return;
-
-    case AUTO_STATE_SIGNAL_OPT_AZ_WEST_WAIT:
-      if (azimuthIsPulseActive()) return;
-      if (millis() - signalOptStepStartedAtMs < SIGNAL_OPT_AZ_SETTLE_MS) return;
-      rfUpdate();
-      signalOptUpdateBest(rfGetFilteredAdc());
-      // V3: Nach jedem AZ-Schritt erneut den West-Hallsensor pruefen.
-      // Wenn die echte mechanische West-Grenze erreicht ist, wechselt die
-      // Signaloptimierung sauber zur Winkel-Optimierung.
-      if (signalOptAzLimitReached(AZ_DIR_WEST)) {
-        signalOptStartElUpPhase();
-        return;
-      }
-      if (signalOptIsClearlyWorse(rfGetFilteredAdc())) {
-        signalOptStartElUpPhase();
-        return;
-      }
-      autoState = AUTO_STATE_SIGNAL_OPT_AZ_WEST_START;
-      return;
-
-    case AUTO_STATE_SIGNAL_OPT_EL_UP_START:
-      if (!signalOptIssueElevationStep(EL_DIR_UP)) {
-        signalOptStartElDownPhase();
-        return;
-      }
-      autoState = AUTO_STATE_SIGNAL_OPT_EL_UP_WAIT;
-      return;
-
-    case AUTO_STATE_SIGNAL_OPT_EL_UP_WAIT:
-      if (elevationIsPulseActive()) return;
-      if (millis() - signalOptStepStartedAtMs < SIGNAL_OPT_EL_SETTLE_MS) return;
-      manualElDirection = EL_DIR_STOP;
-      rfUpdate();
-      signalOptUpdateBest(rfGetFilteredAdc());
-      if (signalOptIsClearlyWorse(rfGetFilteredAdc())) {
-        signalOptStartElDownPhase();
-        return;
-      }
-      autoState = AUTO_STATE_SIGNAL_OPT_EL_UP_START;
-      return;
-
-    case AUTO_STATE_SIGNAL_OPT_EL_DOWN_START:
-      if (!signalOptIssueElevationStep(EL_DIR_DOWN)) {
-        signalOptFinish();
-        return;
-      }
-      autoState = AUTO_STATE_SIGNAL_OPT_EL_DOWN_WAIT;
-      return;
-
-    case AUTO_STATE_SIGNAL_OPT_EL_DOWN_WAIT:
-      if (elevationIsPulseActive()) return;
-      if (millis() - signalOptStepStartedAtMs < SIGNAL_OPT_EL_SETTLE_MS) return;
-      manualElDirection = EL_DIR_STOP;
-      rfUpdate();
-      signalOptUpdateBest(rfGetFilteredAdc());
-      if (signalOptIsClearlyWorse(rfGetFilteredAdc())) {
-        signalOptFinish();
-        return;
-      }
-      autoState = AUTO_STATE_SIGNAL_OPT_EL_DOWN_START;
-      return;
-
-    case AUTO_STATE_SIGNAL_OPT_RETURN_AZ_START: {
-      if (azPositionSteps == signalOptBestAzSteps) {
-        autoState = AUTO_STATE_SIGNAL_OPT_RETURN_EL_START;
-        return;
-      }
-
-      const AzimuthDirection dir = (azPositionSteps < signalOptBestAzSteps) ? AZ_DIR_EAST : AZ_DIR_WEST;
-      if (!canMoveAzimuth(dir)) {
-        Serial.println("SIGNAL OPT V3: Rueckfahrt AZ blockiert, pruefe Winkel Rueckfahrt.");
-        autoState = AUTO_STATE_SIGNAL_OPT_RETURN_EL_START;
-        return;
-      }
-
-      issueAzimuthPulse(dir, SIGNAL_OPT_AZ_STEP_MS);
-      applyAzStepFromDir(dir);
-      signalOptStepStartedAtMs = millis();
-      autoState = AUTO_STATE_SIGNAL_OPT_RETURN_AZ_WAIT;
-      return;
-    }
-
-    case AUTO_STATE_SIGNAL_OPT_RETURN_AZ_WAIT:
-      if (azimuthIsPulseActive()) return;
-      if (millis() - signalOptStepStartedAtMs < SIGNAL_OPT_AZ_SETTLE_MS) return;
-      autoState = AUTO_STATE_SIGNAL_OPT_RETURN_AZ_START;
-      return;
-
-    case AUTO_STATE_SIGNAL_OPT_RETURN_EL_START: {
-      const float nowDeg = currentRelativeAngle();
-      if (moveToRelativeElevationPulse(nowDeg, signalOptBestElevationDeg, SIGNAL_OPT_RETURN_EL_TOLERANCE_DEG)) {
-        signalOptCompleteAtBest();
-        return;
-      }
-      signalOptStepStartedAtMs = millis();
-      manualElDirection = (signalOptBestElevationDeg > nowDeg) ? EL_DIR_UP : EL_DIR_DOWN;
-      autoState = AUTO_STATE_SIGNAL_OPT_RETURN_EL_WAIT;
-      return;
-    }
-
-    case AUTO_STATE_SIGNAL_OPT_RETURN_EL_WAIT:
-      if (elevationIsPulseActive()) return;
-      if (millis() - signalOptStepStartedAtMs < SIGNAL_OPT_EL_SETTLE_MS) return;
-      manualElDirection = EL_DIR_STOP;
-      autoState = AUTO_STATE_SIGNAL_OPT_RETURN_EL_START;
-      return;
-
     case AUTO_STATE_COMPLETE:
       return;
 
@@ -2450,18 +2032,6 @@ static const char* autoStateText() {
     case AUTO_STATE_NEW_CHANGE_ELEVATION_START:return "HOEHE ALT";
     case AUTO_STATE_NEW_CHANGE_ELEVATION_WAIT:return "HOEHE ALT";
     case AUTO_STATE_EZ_ADJUST_HINT:          return "HOEHE PRUEFEN";
-    case AUTO_STATE_SIGNAL_OPT_AZ_EAST_START:return "OPT AZ OST";
-    case AUTO_STATE_SIGNAL_OPT_AZ_EAST_WAIT: return "OPT AZ OST";
-    case AUTO_STATE_SIGNAL_OPT_AZ_WEST_START:return "OPT AZ WEST";
-    case AUTO_STATE_SIGNAL_OPT_AZ_WEST_WAIT: return "OPT AZ WEST";
-    case AUTO_STATE_SIGNAL_OPT_EL_UP_START:  return "OPT WINKEL +";
-    case AUTO_STATE_SIGNAL_OPT_EL_UP_WAIT:   return "OPT WINKEL +";
-    case AUTO_STATE_SIGNAL_OPT_EL_DOWN_START:return "OPT WINKEL -";
-    case AUTO_STATE_SIGNAL_OPT_EL_DOWN_WAIT: return "OPT WINKEL -";
-    case AUTO_STATE_SIGNAL_OPT_RETURN_AZ_START:
-    case AUTO_STATE_SIGNAL_OPT_RETURN_AZ_WAIT: return "OPT RUECK AZ";
-    case AUTO_STATE_SIGNAL_OPT_RETURN_EL_START:
-    case AUTO_STATE_SIGNAL_OPT_RETURN_EL_WAIT: return "OPT RUECK WINKEL";
     case AUTO_STATE_COMPLETE:                return "SAT BESTAETIGT";
     case AUTO_STATE_FAILED:                  return "FAILED";
     default:                                 return "UNKNOWN";
@@ -2487,18 +2057,6 @@ static const char* autoInfoText() {
     case AUTO_STATE_NEW_CHANGE_ELEVATION_START:
     case AUTO_STATE_NEW_CHANGE_ELEVATION_WAIT:return "SUCHE: HOEHE ALT";
     case AUTO_STATE_EZ_ADJUST_HINT:          return "MITTE: HOEHE PRUEFEN";
-    case AUTO_STATE_SIGNAL_OPT_AZ_EAST_START:
-    case AUTO_STATE_SIGNAL_OPT_AZ_EAST_WAIT: return "SIGNAL: AZ OST OPTIMIEREN";
-    case AUTO_STATE_SIGNAL_OPT_AZ_WEST_START:
-    case AUTO_STATE_SIGNAL_OPT_AZ_WEST_WAIT: return "SIGNAL: AZ WEST OPTIMIEREN";
-    case AUTO_STATE_SIGNAL_OPT_EL_UP_START:
-    case AUTO_STATE_SIGNAL_OPT_EL_UP_WAIT:   return "SIGNAL: WINKEL PLUS TEST";
-    case AUTO_STATE_SIGNAL_OPT_EL_DOWN_START:
-    case AUTO_STATE_SIGNAL_OPT_EL_DOWN_WAIT: return "SIGNAL: WINKEL MINUS TEST";
-    case AUTO_STATE_SIGNAL_OPT_RETURN_AZ_START:
-    case AUTO_STATE_SIGNAL_OPT_RETURN_AZ_WAIT: return "SIGNAL: RUECKFAHRT AZ BESTPUNKT";
-    case AUTO_STATE_SIGNAL_OPT_RETURN_EL_START:
-    case AUTO_STATE_SIGNAL_OPT_RETURN_EL_WAIT: return "SIGNAL: RUECKFAHRT WINKEL BESTPUNKT";
     case AUTO_STATE_COMPLETE:                return "ASTRA 19.2 GEFUNDEN";
     case AUTO_STATE_FAILED:                  return autoFailReason;
     default:                                 return "INFO: ---";
@@ -2561,18 +2119,6 @@ const char* liveGetAzimuthStateText() {
       case AUTO_STATE_NEW_CHANGE_ELEVATION_START:
       case AUTO_STATE_NEW_CHANGE_ELEVATION_WAIT:return "Hoehe alt";
       case AUTO_STATE_EZ_ADJUST_HINT:          return "Hoehe pruefen";
-      case AUTO_STATE_SIGNAL_OPT_AZ_EAST_START:
-      case AUTO_STATE_SIGNAL_OPT_AZ_EAST_WAIT: return "Signal opt. Ost";
-      case AUTO_STATE_SIGNAL_OPT_AZ_WEST_START:
-      case AUTO_STATE_SIGNAL_OPT_AZ_WEST_WAIT: return "Signal opt. West";
-      case AUTO_STATE_SIGNAL_OPT_EL_UP_START:
-      case AUTO_STATE_SIGNAL_OPT_EL_UP_WAIT:   return "Signal opt. Winkel +";
-      case AUTO_STATE_SIGNAL_OPT_EL_DOWN_START:
-      case AUTO_STATE_SIGNAL_OPT_EL_DOWN_WAIT: return "Signal opt. Winkel -";
-      case AUTO_STATE_SIGNAL_OPT_RETURN_AZ_START:
-      case AUTO_STATE_SIGNAL_OPT_RETURN_AZ_WAIT: return "Signal opt. Rueck AZ";
-      case AUTO_STATE_SIGNAL_OPT_RETURN_EL_START:
-      case AUTO_STATE_SIGNAL_OPT_RETURN_EL_WAIT: return "Signal opt. Rueck Winkel";
       case AUTO_STATE_COMPLETE:                return "Astra gefunden";
       case AUTO_STATE_FAILED:                  return "fehler";
       default:                                 return "wartet";
@@ -2611,14 +2157,6 @@ const char* liveGetElevationStateText() {
       case AUTO_STATE_NEW_CHANGE_ELEVATION_START:
       case AUTO_STATE_NEW_CHANGE_ELEVATION_WAIT:return "hoehe alt";
       case AUTO_STATE_EZ_ADJUST_HINT:          return "hoehe pruefen";
-      case AUTO_STATE_SIGNAL_OPT_AZ_EAST_START:
-      case AUTO_STATE_SIGNAL_OPT_AZ_EAST_WAIT:
-      case AUTO_STATE_SIGNAL_OPT_AZ_WEST_START:
-      case AUTO_STATE_SIGNAL_OPT_AZ_WEST_WAIT: return "az optimiert";
-      case AUTO_STATE_SIGNAL_OPT_EL_UP_START:
-      case AUTO_STATE_SIGNAL_OPT_EL_UP_WAIT:   return "winkel hoch";
-      case AUTO_STATE_SIGNAL_OPT_EL_DOWN_START:
-      case AUTO_STATE_SIGNAL_OPT_EL_DOWN_WAIT: return "winkel runter";
       case AUTO_STATE_COMPLETE:                return "Astra gefunden";
       case AUTO_STATE_FAILED:                  return "auto fehler";
       default:                                 return "auto aktiv";
@@ -2679,7 +2217,7 @@ const char* liveGetInfoText() {
     }
 
     if (azimuthIsCenterDetected()) return "INFO: Mitte erkannt";
-    return "INFO: Nach Sueden ausrichten";
+    return "INFO: Anlage centrieren";
   }
 
   if (isAutoMode()) {
@@ -2908,11 +2446,11 @@ void liveCommandStartCentering() {
   centerReturnMs = 0;
   centerSearchReverseCount = 0;
 
-  Serial.println("MENUE 1: Ausrichten. Nach Sueden ausrichten, +/- Elevation, MODE startet.");
+  Serial.println("MENUE 1: Grundeinstellung. Anlage centrieren, +/- Elevation, MODE startet.");
 }
 
 void liveCommandStartCenterRun() {
-  // Web-UI-Start fuer die Ausrichten-Seite.
+  // Web-UI-Start fuer die Grundeinstellung-Seite.
   //
   // Abgrenzung zur lokalen Tastenbedienung:
   // - Am Geraet wird erst Menuepunkt 1 gewaehlt und danach mit MODE gestartet.
@@ -2922,8 +2460,8 @@ void liveCommandStartCenterRun() {
   // Deshalb ruft diese Funktion zuerst liveCommandStartCentering() auf und startet
   // danach sofort die echte Center-Homing-Routine.
   //
-  // Web-UI: Der Button "Ausrichten starten" soll nicht nur den
-  // Ausrichten-Modus anzeigen, sondern die echte Mitten-/Centerfahrt
+  // Web-UI: Der Button "Grundeinstellung starten" soll nicht nur den
+  // Grundeinstellung-Modus anzeigen, sondern die echte Mitten-/Centerfahrt
   // ausloesen. Die Tastenlogik bleibt unveraendert: Am Geraet wird
   // weiterhin erst der Menuepunkt ausgewaehlt und danach mit MODE gestartet.
   liveCommandStartCentering();
@@ -2939,7 +2477,7 @@ void liveCommandStartCenterRun() {
 void liveCommandAbortCentering() {
   centerSuccessNoticeActive = false;
 
-  // V3: Web-UI-Abbruch fuer die Ausrichten-/Mittenfahrt.
+  // V3: Web-UI-Abbruch fuer die Grundeinstellung-/Mittenfahrt.
   // Die Center-Zeitmessung schaltet den Azimut teilweise ueber
   // azimuthDriveRawLogical(), damit die Hall-Bereichsvermessung ohne
   // Puls-/Step-Automatiken laufen kann. Deshalb muss ein Web-Abbruch
@@ -2959,11 +2497,11 @@ void liveCommandAbortCentering() {
 }
 
 bool liveCenteringActive() {
-  // V3: "Ausrichten laeuft" darf nur gemeldet werden, wenn die
+  // V3: "Grundeinstellung laeuft" darf nur gemeldet werden, wenn die
   // Center-/Mittenfahrt wirklich gestartet wurde.
   // Vorher wurde hier isCenterMode() zurueckgegeben. Dadurch zeigte die
-  // Web-UI schon beim blossen Oeffnen des Menuepunkts "Ausrichten/Mitte"
-  // faelschlich "Ausrichtung laeuft", obwohl noch kein Start gedrueckt
+  // Web-UI schon beim blossen Oeffnen des Menuepunkts "Grundeinstellung/Mitte"
+  // faelschlich "Grundeinstellung laeuft", obwohl noch kein Start gedrueckt
   // wurde. Das verwirrte auch die Tastenbedienung, weil Anzeige und echter
   // Ablauf nicht zusammenpassten.
   //
@@ -3040,7 +2578,7 @@ const char* liveGetCenteringInfoText() {
       return "Die Mitte wurde gesetzt.";
     case CENTER_TIMING_IDLE:
     default:
-      return "Ausrichten laeuft.";
+      return "Grundeinstellung laeuft.";
   }
 }
 
@@ -3123,14 +2661,14 @@ void liveCommandElStop() {
 }
 
 void liveCommandSetupElevationUpPulse() {
-  // Web-UI AUTO SETUP: kurze EZ-Korrektur wie im Ausrichten-Menue.
+  // Web-UI AUTO SETUP: kurze EZ-Korrektur wie im Grundeinstellung-Menue.
   // Kein Wechsel in den manuellen Dauerfahrtmodus und kein Abbruch des AUTO-Setups.
   if (!mpuOk) return;
   startCenterElevationPulseUp();
 }
 
 void liveCommandSetupElevationDownPulse() {
-  // Web-UI AUTO SETUP: kurze EZ-Korrektur wie im Ausrichten-Menue.
+  // Web-UI AUTO SETUP: kurze EZ-Korrektur wie im Grundeinstellung-Menue.
   // Kein Wechsel in den manuellen Dauerfahrtmodus und kein Abbruch des AUTO-Setups.
   if (!mpuOk) return;
   startCenterElevationPulseDown();
@@ -3503,7 +3041,7 @@ static void centerTimingDone() {
   centerSuccessNoticeActive = true;
 
   // V3_01: Nach einer manuellen Mittenfahrt bleiben wir bewusst im
-  // Ausrichten-Menue. Dadurch kann das TFT direkt an derselben Stelle von der
+  // Grundeinstellung-Menue. Dadurch kann das TFT direkt an derselben Stelle von der
   // gelben Laufmeldung auf die hellgruene Abschlussmeldung wechseln:
   // "Antenne grob nach Sueden ausrichten". Der Nutzer verlaesst den Dialog
   // weiterhin wie gewohnt mit MODE lang ins Hauptmenue.

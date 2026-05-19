@@ -187,14 +187,14 @@ void liveCommandOpenMainMenu();
 // Startet Menuepunkt 1: automatische Referenzfahrt zur Mitte.
 void liveCommandStartCentering();
 void liveCommandStartCenterRun();
-// Bricht eine laufende Ausrichten-/Centerfahrt aus der Web-UI ab.
+// Bricht eine laufende Grundeinstellung-/Centerfahrt aus der Web-UI ab.
 void liveCommandAbortCentering();
-// Zeigt, ob der Ausrichten-/Center-Modus aktiv ist.
+// Zeigt, ob der Grundeinstellung-/Center-Modus aktiv ist.
 bool liveCenteringActive();
-// Zeigt, ob die letzte manuell/Web gestartete Ausrichten-Fahrt erfolgreich beendet wurde.
+// Zeigt, ob die letzte manuell/Web gestartete Grundeinstellung-Fahrt erfolgreich beendet wurde.
 bool liveCenteringSuccessNoticeActive();
 
-// V3: Live-Texte fuer die Web-UI-Seite Ausrichten/Mitte.
+// V3: Live-Texte fuer die Web-UI-Seite Grundeinstellung/Mitte.
 // Diese Funktionen liefern menschenlesbare Phasen- und Infotexte, damit
 // web_server.cpp nicht interne Center-Zustaende interpretieren muss.
 // Dadurch bleiben TFT, Web-UI und Runtime logisch sauber getrennt.
@@ -222,7 +222,7 @@ void liveCommandElDown();
 // Stoppt die Elevationsbewegung.
 void liveCommandElStop();
 
-// Kurze Elevationskorrektur im Setup-/Ausrichten-Kontext.
+// Kurze Elevationskorrektur im Setup-/Grundeinstellung-Kontext.
 // Wird von der Web-UI im AUTO SETUP genutzt, ohne in den manuellen Dauerfahrtmodus zu wechseln.
 void liveCommandSetupElevationUpPulse();
 void liveCommandSetupElevationDownPulse();

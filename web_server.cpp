@@ -7,7 +7,7 @@
 
   Aktueller Bedienfokus V3:
   - klare Menues ohne ueberfluessige Diagnose auf Bedienseiten
-  - Suchen mit RF-Ampel; PLUS bestaetigt Kandidaten ohne automatische Optimierung
+  - Suchen mit RF-Ampel; PLUS bestaetigt Kandidaten und zeigt Abschlussfenster
   - Hall-Sensoren verstaendlich als Center/Ost/West anzeigen
   - Live-Aktualisierung ohne komplettes Neuladen, wo es fuer Tests hilft
 */
@@ -356,7 +356,7 @@ static String buildHomePage() {
   // entfernt. Die Startseite soll nur noch die direkt bedienbaren Menuekacheln
   // anzeigen; Detail- und Hilfetexte stehen in den jeweiligen Unterseiten.
   html += "<div class='tiles'>";
-  html += tile("/ausrichten", "1", "Grundeinstellung", "Mitte / Center setzen", "t1");
+  html += tile("/ausrichten", "1", "Grundeinstellung", "Anlage centrieren", "t1");
   html += tile("/auto", "2", "Suchen", "Winkel pruefen und Suche starten", "t2");
   html += tile("/manuell", "3", "Manuell", "Azimut und Winkel direkt steuern", "t3");
   html += tile("/status", "4", "Status / Diagnose", "RF, Hall, Winkel, Reset", "t4");
@@ -377,7 +377,7 @@ static String buildHomePage() {
 // Diese Seite nutzt eine kleine JSON-Statusabfrage. Dadurch erscheint die
 // gruen hervorgehobene Erfolgsmeldung automatisch, ohne dass der Nutzer die
 // Seite manuell aktualisieren muss.
-static String buildAusrichtenPage() {
+static String buildGrundeinstellungPage() {
   const bool mpuReady = liveMpuReady();
   const bool inAuto = (String(liveGetModeText()) == "AUTO");
   const bool centerActive = liveCenteringActive();
@@ -544,7 +544,7 @@ static String buildAutoPage() {
     html += actionButton("/auto/ez/up", "Winkel +  Ist " + ezNow + " / Ziel " + ezTarget, mpuReady, "orange");
     html += "</div>";
     html += "<div class='grid2' style='margin-top:10px'>";
-    html += actionButton("/ausrichten", "AUSRICHTEN", true, "primary");
+    html += actionButton("/ausrichten", "GRUNDEINST.", true, "primary");
     html += actionButton("/status", "STATUS", true, "gray");
     html += "</div>";
     if (!mpuReady) {
@@ -607,7 +607,7 @@ static String buildAutoPage() {
     // werden darf. Es gibt hier bewusst kein zweites Untermenue mehr.
     html += "<div class='chips'>" + chip("SUCHE NICHT BEREIT", "warn") + chip("Winkel manuell", "blue") + "</div>";
     html += "<div class='pageLead'>Vor der Suche bitte Grundeinstellung durchfuehren, den Sat-Receiver einschalten und den Winkelsensor pruefen.</div>";
-    html += actionButton("/ausrichten", "AUSRICHTEN", true, "primary");
+    html += actionButton("/ausrichten", "GRUNDEINST.", true, "primary");
     if (!mpuReady) {
       html += "<div class='note warnbox'>Winkelsensor ist nicht bereit. Die Suche kann deshalb noch nicht gestartet werden.</div>";
     }
@@ -813,7 +813,7 @@ static String buildStatusPage() {
 // Sicherheitsseite fuer ESP-Reset.
 // Der Reset wird nicht direkt aus der Navigation ausgefuehrt, sondern erst nach
 // einer Bestaetigungsseite. So wird ein versehentlicher Neustart waehrend einer
-// Ausrichtung vermieden.
+// Grundeinstellung vermieden.
 static String buildResetConfirmPage() {
   String html;
   reserveHtml(html, 8000);
@@ -978,7 +978,7 @@ static void handleRoot() {
   sendHtml(buildHomePage());
 }
 
-static void handleAusrichtenPage() {
+static void handleGrundeinstellungPage() {
   Serial.println("WEB V3: GET /ausrichten");
 
   // V3: Web-UI und TFT-Menue werden hier bewusst synchronisiert.
@@ -1014,7 +1014,7 @@ static void handleAusrichtenPage() {
     liveCommandStartCentering();
   }
 
-  sendHtml(buildAusrichtenPage());
+  sendHtml(buildGrundeinstellungPage());
 }
 
 static void handleAutoPage() {
@@ -1182,7 +1182,7 @@ static void handleNotFound() {
 // - Kandidatenrouten bilden PLUS/MINUS aus der AUTO-Kandidatenlogik ab
 void webServerInit() {
   server.on("/", handleRoot);
-  server.on("/ausrichten", handleAusrichtenPage);
+  server.on("/ausrichten", handleGrundeinstellungPage);
   server.on("/auto", handleAutoPage);
   server.on("/manuell", handleManualPage);
   server.on("/status", handleStatusPage);

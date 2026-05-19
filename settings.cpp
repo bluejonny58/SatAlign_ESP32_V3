@@ -5,7 +5,6 @@
   - Standard-Winkel beim Start
   - Startfenster fuer manuelle Winkeleinstellung
   - RF-Grenzwerte aus den Aussentests
-  - reservierte Altwerte der entfernten Signaloptimierung
 
   Die Werte werden bewusst im Sketch gehalten und nicht dauerhaft in NVS
   gespeichert. Wenn im Test bessere Werte gefunden werden, werden sie hier
@@ -341,30 +340,13 @@ int   BADSAT_RESUME_MARGIN_STEPS = 2;
 int   BADSAT_MERGE_GAP_STEPS = 3;
 
 // -----------------------------------------------------
-// Reservierte Altwerte der entfernten Signaloptimierung
+// Signaloptimierung entfernt
 // -----------------------------------------------------
-// Kommentarstand: V3
+// Kommentarstand: V3_01
 //
-// Diese Werte werden in der aktuellen Bedienlinie nicht aktiv verwendet.
-// Die automatische Optimierung nach PLUS wurde nach dem Live-Test entfernt,
-// weil der Nutzer bestaetigte TV-Punkt dadurch verlassen werden konnte.
-// PLUS bestaetigt jetzt nur den Kandidaten und behaelt die Position.
-//
-// Die Werte bleiben vorerst als reservierte Altwerte erhalten, falls spaeter
-// eine neu geplante und getestete Optimierung wieder aufgebaut werden soll.
-// RF-Logik im aktuellen Aufbau: kleinerer ADC-Wert = staerkeres Signal.
-unsigned long SIGNAL_OPT_AZ_STEP_MS = 80;
-unsigned long SIGNAL_OPT_AZ_SETTLE_MS = 700;
-unsigned long SIGNAL_OPT_EL_STEP_MS = 60;
-unsigned long SIGNAL_OPT_EL_SETTLE_MS = 1000;
-float SIGNAL_OPT_RF_IMPROVE_ADC = 40.0f;
-float SIGNAL_OPT_RF_WORSE_ADC = 70.0f;
-float SIGNAL_OPT_RETURN_EL_TOLERANCE_DEG = 1.0f;
-// V3: Primaere AZ-Grenze ist der Ost-/West-Hallsensor.
-// Die folgende maximale AZ-Schrittzahl ist nur ein Sicherheitslimit.
-// Fuer die konservative Optimierung sind die Testwege bewusst kurz.
-int SIGNAL_OPT_AZ_MAX_STEPS_PER_DIR = 2;
-int SIGNAL_OPT_EL_MAX_STEPS_PER_DIR = 1;
+// Die fruehere automatische Signaloptimierung nach PLUS ist im Code-Cleanup
+// vollstaendig entfernt. PLUS bestaetigt den Kandidaten; die Anlage bleibt
+// an der vom Nutzer geprueften Position stehen. Deshalb gibt es hier keine
 
 // =====================================================
 // Speicherstrategie / No-NVS-Betrieb
@@ -495,17 +477,6 @@ static void applyDefaultSettings() {
   BADSAT_RESUME_MARGIN_STEPS = 2;
   BADSAT_MERGE_GAP_STEPS = 3;
 
-  // Reservierte Altwerte der entfernten Signaloptimierung.
-  // V3: Startwerte fuer den Aussentest; bewusst zentral anpassbar.
-  SIGNAL_OPT_AZ_STEP_MS = 80;
-  SIGNAL_OPT_AZ_SETTLE_MS = 700;
-  SIGNAL_OPT_EL_STEP_MS = 60;
-  SIGNAL_OPT_EL_SETTLE_MS = 1000;
-  SIGNAL_OPT_RF_IMPROVE_ADC = 40.0f;
-  SIGNAL_OPT_RF_WORSE_ADC = 70.0f;
-  SIGNAL_OPT_RETURN_EL_TOLERANCE_DEG = 1.0f;
-  SIGNAL_OPT_AZ_MAX_STEPS_PER_DIR = 2;
-  SIGNAL_OPT_EL_MAX_STEPS_PER_DIR = 1;
 }
 
 // Speichert aktuell nichts dauerhaft.
@@ -672,24 +643,6 @@ void printSettingsToSerial() {
   Serial.print("BADSAT_MERGE_GAP_STEPS = ");
   Serial.println(BADSAT_MERGE_GAP_STEPS);
 
-  Serial.print("SIGNAL_OPT_AZ_STEP_MS = ");
-  Serial.println(SIGNAL_OPT_AZ_STEP_MS);
-  Serial.print("SIGNAL_OPT_AZ_SETTLE_MS = ");
-  Serial.println(SIGNAL_OPT_AZ_SETTLE_MS);
-  Serial.print("SIGNAL_OPT_EL_STEP_MS = ");
-  Serial.println(SIGNAL_OPT_EL_STEP_MS);
-  Serial.print("SIGNAL_OPT_EL_SETTLE_MS = ");
-  Serial.println(SIGNAL_OPT_EL_SETTLE_MS);
-  Serial.print("SIGNAL_OPT_RF_IMPROVE_ADC = ");
-  Serial.println(SIGNAL_OPT_RF_IMPROVE_ADC, 1);
-  Serial.print("SIGNAL_OPT_RF_WORSE_ADC = ");
-  Serial.println(SIGNAL_OPT_RF_WORSE_ADC, 1);
-  Serial.print("SIGNAL_OPT_RETURN_EL_TOLERANCE_DEG = ");
-  Serial.println(SIGNAL_OPT_RETURN_EL_TOLERANCE_DEG, 2);
-  Serial.print("SIGNAL_OPT_AZ_MAX_STEPS_PER_DIR = ");
-  Serial.println(SIGNAL_OPT_AZ_MAX_STEPS_PER_DIR);
-  Serial.print("SIGNAL_OPT_EL_MAX_STEPS_PER_DIR = ");
-  Serial.println(SIGNAL_OPT_EL_MAX_STEPS_PER_DIR);
 
   Serial.println("====================");
 }
