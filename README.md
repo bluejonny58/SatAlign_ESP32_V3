@@ -36,6 +36,22 @@ The V3.0.3 RC1 pinout is the active basis for the new PCB development and must m
 
 ---
 
+## Hardware / PCB availability
+
+The firmware and general project documentation are published so that others can study, understand, modify and improve the SatAlign ESP32 project.
+
+However, the custom SatAlign PCB is handled separately:
+
+- KiCad PCB source files are currently **not published** in this repository.
+- Gerber files, drill files and other PCB production data are currently **not published** in this repository.
+- The PCB screenshots shown in the documentation are for project documentation and development transparency only.
+- The screenshots are **not manufacturing files** and do not grant permission to reproduce or commercially manufacture the custom PCB.
+- Finished PCB boards may be made available separately.
+
+This allows the firmware and project concept to remain open while the custom PCB production data remains reserved.
+
+---
+
 ## What is SatAlign?
 
 SatAlign is a DIY controller for a portable satellite antenna system.
@@ -80,6 +96,8 @@ The PCB replaces the earlier breadboard/test wiring and is now the active basis 
 The PCB combines the ESP32 controller, RF detector input, MPU6050 angle sensor, Hall sensor inputs, TFT display connector, local buttons, elevation motor driver interface and optocoupler-based azimuth control interface.
 
 Some ESP32 pins were intentionally changed compared with the earlier test wiring to make the PCB routing cleaner and mechanically more practical.
+
+The screenshots above are documentation images only. The actual KiCad source files and production files are not part of the public repository.
 
 More details are available in:
 
@@ -135,7 +153,7 @@ Typical components used in the current design:
 - Hall sensors for azimuth reference and limit detection
 - Mini360 buck converter
 - MODE / PLUS / MINUS buttons
-- KiCad PCB for the current hardware layout
+- custom KiCad PCB layout for the current hardware concept
 
 ---
 
@@ -234,10 +252,22 @@ Use the versions as follows:
 
 ---
 
-## License and disclaimer
+## License scope
+
+The firmware/software source code in this repository is provided under the MIT License unless otherwise stated.
+
+The custom PCB layout, KiCad source files, Gerber files, drill files and other production data are **not included** in this repository and are **not licensed for reproduction or manufacturing**.
+
+Documentation images may show the PCB concept, but they are not production files and do not grant permission to manufacture or commercially reproduce the custom PCB.
+
+See `LICENSE` for details.
+
+---
+
+## Disclaimer
 
 This project is provided as an open DIY project.
 
-You may study, modify and improve the project. Use it at your own risk.
+You may study, modify and improve the published firmware/software. Use it at your own risk.
 
 Satellite systems, motor drivers, 12 V wiring, RF components and outdoor mechanical structures can cause damage if wired or used incorrectly. Always verify wiring, voltage levels, polarity, current ratings and mechanical safety before powering the system.
