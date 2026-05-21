@@ -24,11 +24,32 @@ SatAlign was created as a practical solution for this problem. It provides a str
 
 ## Current project status
 
-**Current stable baseline:** `v3.0.0`
+### Stable tested and built version: V3.0.2
 
-This version has been tested as a working baseline and is used as the starting point for further development.
+**V3.0.2** is the last tested and built version of SatAlign ESP32 V3.
 
-Implemented in the current baseline:
+This version was compiled, uploaded and practically tested with the existing hardware setup. It should be treated as the current stable reference version for users who want to understand, reproduce or further develop the verified system behavior.
+
+### PCB pinout development: `pcb-pinout-v3.0.3`
+
+The branch **`pcb-pinout-v3.0.3`** introduces the new ESP32 pin assignment for the KiCad PCB version.
+
+Only the ESP32 pin assignment is intended to change in this step. The reason for these changes is improved PCB routing and a cleaner mechanical board layout.
+
+**Important:**  
+The PCB pinout version has **not yet been practically tested on the final PCB hardware**. It should therefore be treated as a development version until the first assembled PCB has been validated.
+
+### Pinout difference between tested setup and PCB development
+
+| Function | V3.0.2 tested setup | PCB pinout development |
+|---|---:|---:|
+| MPU SCL | GPIO21 | GPIO26 |
+| Elevation IN1 | GPIO26 | GPIO21 |
+| TFT CS | GPIO14 | GPIO5 |
+
+The old V3.0.2 pinout remains documented as the last tested setup. The PCB pinout is the active basis for the next hardware validation step, but it is not yet a practically tested release.
+
+Implemented in the tested V3.0.2 baseline:
 
 - DiSEqC-compatible azimuth movement workflow
 - elevation actuator control
@@ -113,6 +134,14 @@ The project can be operated locally through the TFT display and buttons, or thro
 Once Wi-Fi and OTA credentials are configured locally, the ESP32 can be updated over the network.
 
 ---
+
+## Pinout note
+
+The firmware release **V3.0.2** remains the last tested and built version.
+
+For the new KiCad PCB, some ESP32 pins were reassigned to make PCB routing cleaner and more practical. This PCB pinout is the active basis for further PCB development, but it has not yet been practically tested on the final PCB.
+
+The active firmware pinout is defined in `pins.h`. The earlier breadboard/test pinout should only be kept as documentation/reference.
 
 ## Hardware overview
 
