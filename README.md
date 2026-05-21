@@ -73,9 +73,9 @@ The current hardware development is based on a dedicated KiCad PCB.
 
 The PCB replaces the earlier breadboard/test wiring and is now the active basis for further hardware development. The firmware pinout in `pins.h` must follow the PCB assignment for the V3.0.3 RC1 branch.
 
-![KiCad schematic overview](docs/images/kicad_schematic_overview.png)
+![KiCad schematic overview](images/kicad_schematic_overview.png)
 
-![KiCad PCB layout overview](docs/images/kicad_pcb_layout_overview.png)
+![KiCad PCB layout overview](images/kicad_pcb_layout_overview.png)
 
 The PCB combines the ESP32 controller, RF detector input, MPU6050 angle sensor, Hall sensor inputs, TFT display connector, local buttons, elevation motor driver interface and optocoupler-based azimuth control interface.
 
