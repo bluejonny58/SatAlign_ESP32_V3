@@ -1,24 +1,8 @@
 # SatAlign ESP32 V3
 
-**ESP32-based manual and semi-automatic satellite antenna alignment for mobile Selfsat-style setups.**
+ESP32-based controller for manual and semi-automatic alignment of a Selfsat-style satellite antenna.
 
-SatAlign ESP32 V3 is a DIY controller for aligning a flat satellite antenna while travelling with a camper, van or mobile setup. It combines **DiSEqC-based azimuth movement**, **motorized elevation control**, **MPU6050 angle feedback**, **RF signal detection**, a **local TFT display**, a **mobile web interface** and **OTA updates** in one compact ESP32 project.
-
-The goal is not to replace a professional automatic satellite system. The goal is to build an understandable, modifiable and field-testable open DIY system that helps with real-world satellite alignment.
-
-<p align="center">
-  <img src="images/Antennenhalterung.jpg" alt="SatAlign antenna holder concept with elevation linear actuator" width="760">
-</p>
-
-<p align="center"><em>Early antenna holder concept with elevation linear actuator. The mechanical idea shown here was later implemented in metal for the real project.</em></p>
-
----
-
-## Why this project exists
-
-Aligning a satellite antenna by hand while travelling can be frustrating: the elevation angle must be roughly correct, the antenna must be moved carefully in azimuth, the receiver must already be active, and small mechanical changes can decide whether a usable signal is found or not.
-
-SatAlign was created as a practical solution for this problem. It provides a structured alignment workflow, visual feedback and RF-based candidate detection so the user can find and confirm the correct satellite more reliably.
+SatAlign combines an ESP32, TFT display, web interface, RF signal detection, MPU6050 elevation sensing, Hall sensor feedback and a DiSEqC-compatible azimuth motor concept to support repeatable satellite alignment for Astra 19.2°E.
 
 ---
 
@@ -26,325 +10,234 @@ SatAlign was created as a practical solution for this problem. It provides a str
 
 ### Stable tested and built version: V3.0.2
 
-**V3.0.2** is the last tested and built version of SatAlign ESP32 V3.
+**V3.0.2** is the last fully tested and built version of SatAlign ESP32 V3.
 
-This version was compiled, uploaded and practically tested with the existing hardware setup. It should be treated as the current stable reference version for users who want to understand, reproduce or further develop the verified system behavior.
+This version was compiled, uploaded and practically tested with the existing hardware setup. It remains the recommended stable reference for anyone who wants to understand or reproduce the currently verified system behavior.
 
-### PCB pinout development: `pcb-pinout-v3.0.3`
+### Current development version: V3.0.3 RC1 - PCB pinout
 
-The branch **`pcb-pinout-v3.0.3`** introduces the new ESP32 pin assignment for the KiCad PCB version.
+**V3.0.3 RC1** is the current PCB pinout development version.
 
-Only the ESP32 pin assignment is intended to change in this step. The reason for these changes is improved PCB routing and a cleaner mechanical board layout.
+This version introduces the new ESP32 pin assignment for the KiCad PCB layout. The pin changes were made intentionally to improve PCB routing and create a cleaner, more practical board layout.
 
 **Important:**  
-The PCB pinout version has **not yet been practically tested on the final PCB hardware**. It should therefore be treated as a development version until the first assembled PCB has been validated.
+V3.0.3 RC1 has compiled successfully, but it has **not yet been practically tested on the final PCB hardware**. It should therefore be treated as a release candidate for PCB validation, not as a final stable release.
 
-### Pinout difference between tested setup and PCB development
+### Pinout difference between V3.0.2 and V3.0.3 RC1
 
-| Function | V3.0.2 tested setup | PCB pinout development |
+| Function | V3.0.2 tested setup | V3.0.3 RC1 PCB pinout |
 |---|---:|---:|
 | MPU SCL | GPIO21 | GPIO26 |
 | Elevation IN1 | GPIO26 | GPIO21 |
 | TFT CS | GPIO14 | GPIO5 |
 
-The old V3.0.2 pinout remains documented as the last tested setup. The PCB pinout is the active basis for the next hardware validation step, but it is not yet a practically tested release.
-
-Implemented in the tested V3.0.2 baseline:
-
-- DiSEqC-compatible azimuth movement workflow
-- elevation actuator control
-- MPU6050 / GY-521 elevation angle measurement
-- RF signal detection with AD8317 / AD8318-style detector logic
-- satellite candidate detection during the search workflow
-- RF candidate detection already during center alignment
-- PLUS / MINUS candidate confirmation workflow
-- final “Astra 19.2 found” confirmation screen
-- TFT-based local operation
-- mobile web interface
-- Info menu with SSID, IP address and ESP reset function
-- OTA update support
-- GitHub-safe configuration using `secrets.example.h`
+The old V3.0.2 pinout remains documented as the last tested hardware setup.  
+The V3.0.3 RC1 pinout is the active basis for the new PCB development and must match the KiCad PCB.
 
 ---
 
-## Key features
+## What is SatAlign?
 
-### Semi-automatic search workflow
+SatAlign is a DIY controller for a portable satellite antenna system.
 
-SatAlign guides the antenna through a structured alignment sequence. During the search, RF signal changes are evaluated and possible satellite positions are presented as candidates.
+The project supports the alignment workflow by:
 
-The system does **not** blindly decide that a signal is Astra 19.2. Instead, the user confirms the candidate:
+- controlling elevation through a linear actuator and L298N driver
+- using a DiSEqC-compatible satellite motor for azimuth movement
+- reading the current elevation angle with an MPU6050 / GY-521
+- detecting RF signal strength through an AD8317 / AD8318-style RF detector
+- displaying local status on a 128 x 128 TFT display
+- providing a simple web interface for monitoring and operation
+- allowing local control through MODE, PLUS and MINUS buttons
+- supporting OTA firmware updates
 
-- **PLUS** = correct satellite confirmed
-- **MINUS** = wrong satellite, continue or restart the search logic depending on the search state
+SatAlign does not replace a professional satellite meter. It is an experimental DIY project designed to make antenna alignment more structured, reproducible and understandable.
 
-### RF candidate detection during center alignment
+---
 
-If the antenna is already roughly pointing toward the correct satellite, a usable signal may appear during the center alignment movement. The current version can detect this and stop immediately instead of driving past the signal.
+## Why a DiSEqC-compatible azimuth motor?
 
-### DiSEqC-based azimuth movement
+The use of a **DiSEqC-compatible satellite motor** is intentional.
 
-Azimuth movement is handled through a **DiSEqC-compatible satellite motor setup**. SatAlign does not directly drive a separate DC motor for azimuth movement.
+A DiSEqC motor already provides a geared drive suitable for controlled azimuth movement. The gearbox enables a practical search speed without requiring additional custom motor mechanics. At the same time, the motor offers a stable mechanical base for the antenna structure.
 
-This choice is intentional: a DiSEqC-compatible satellite motor already provides a suitable geared drive for controlled azimuth movement. The gearbox enables a practical search speed without requiring additional custom motor mechanics, while the motor itself offers a robust and stable mechanical base for the antenna structure. For a mobile DIY setup, this keeps the azimuth design simpler, mechanically stronger and easier to reproduce.
+For a mobile DIY setup, this keeps the azimuth design simpler, mechanically stronger and easier to reproduce.
 
-### Mechanical concept and 3D printed support parts
+SatAlign does not directly drive a high-power azimuth DC motor. Instead, the ESP32 controls the azimuth movement through an optocoupler-based interface to the external DiSEqC motor control concept.
 
-The mechanical setup combines a metal antenna holder, an elevation linear actuator and several printable support parts. The 3D models are intended as project-specific construction aids and may need to be adapted to the dimensions of the individual tripod, motor and antenna setup. The STL files are stored in the `STL/` folder.
+---
 
-#### Antenna holder and elevation actuator
+## KiCad PCB overview
 
-The antenna holder drawing shows the original idea for the elevation mechanism: a Selfsat-style flat antenna is mounted on a pivoting holder and moved by a linear actuator. In the real project, this concept was implemented in metal to achieve a more stable mechanical structure for outdoor use.
+The current hardware development is based on a dedicated KiCad PCB.
 
-<p align="center">
-  <img src="images/Antennenhalterung.jpg" alt="Antenna holder concept with elevation linear actuator" width="680">
-</p>
+The PCB replaces the earlier breadboard/test wiring and is now the active basis for further hardware development. The firmware pinout in `pins.h` must follow the PCB assignment for the V3.0.3 RC1 branch.
 
-#### Hall sensor and magnet rings
+![KiCad schematic overview](docs/images/kicad_schematic_overview.png)
 
-The Hall ring system consists of two matching parts:
+![KiCad PCB layout overview](docs/images/kicad_pcb_layout_overview.png)
+
+The PCB combines the ESP32 controller, RF detector input, MPU6050 angle sensor, Hall sensor inputs, TFT display connector, local buttons, elevation motor driver interface and optocoupler-based azimuth control interface.
+
+Some ESP32 pins were intentionally changed compared with the earlier test wiring to make the PCB routing cleaner and mechanically more practical.
+
+More details are available in:
+
+```text
+docs/kicad_pcb_documentation.md
+```
+
+---
+
+## Mechanical concept and 3D printed support parts
+
+The project also includes mechanical support parts and design concepts.
+
+### Antenna bracket concept
+
+![Antenna bracket concept](images/Antennenhalterung.jpg)
+
+The antenna bracket image shows the original concept for the antenna support with elevation movement driven by a linear actuator. This concept was later implemented in metal for the actual project hardware.
+
+### Hall sensor rings
+
+![Hall sensor rings](images/Hall_Ringe.png)
+
+The Hall ring concept consists of two matching ring elements:
 
 - the left ring contains the mount for a **4 x 2 mm magnet**
-- the right ring holds the Hall sensors used for center / east / west reference detection
+- the right ring contains the mounts for the Hall sensors
 
-For reliable switching behavior, the distance between both rings should remain as even as possible around the full rotation path. In the prototype, this spacing was set mechanically during assembly with small nails used as simple distance guides. Depending on the exact tripod and motor geometry, both ring dimensions may need to be adjusted before printing.
+The distance between both rings should remain as even as possible around the full rotation. In the prototype assembly, small nails were used as simple spacers during mounting to keep the ring distance consistent.
 
-<p align="center">
-  <img src="images/Hall_Ringe.png" alt="Hall sensor and magnet rings for SatAlign" width="760">
-</p>
+### DiSEqC motor adapter
 
-#### DiSEqC motor tripod adapter
+![DiSEqC motor adapter](images/Adapter.png)
 
-The adapter part is used to mount the DiSEqC-compatible satellite motor into the tripod structure. Its dimensions are not universal: both the adapter and the Hall rings must be adapted to the specific tripod, motor diameter and mechanical tolerances used in the build.
+The adapter is used to mount the DiSEqC motor into the tripod structure.
 
-<p align="center">
-  <img src="images/Adapter.png" alt="Adapter for mounting the DiSEqC motor into the tripod" width="420">
-</p>
-
-### Motorized elevation
-
-Elevation is moved separately by an elevation actuator and monitored with an MPU6050 / GY-521 sensor.
-
-### Local and web control
-
-The project can be operated locally through the TFT display and buttons, or through the mobile web interface.
-
-### OTA updates
-
-Once Wi-Fi and OTA credentials are configured locally, the ESP32 can be updated over the network.
+The size of this adapter and the Hall sensor rings must be adapted to the actual tripod and motor dimensions. The STL files are included in the `STL/` folder.
 
 ---
 
-## Pinout note
+## Main hardware components
 
-The firmware release **V3.0.2** remains the last tested and built version.
+Typical components used in the current design:
 
-For the new KiCad PCB, some ESP32 pins were reassigned to make PCB routing cleaner and more practical. This PCB pinout is the active basis for further PCB development, but it has not yet been practically tested on the final PCB.
-
-The active firmware pinout is defined in `pins.h`. The earlier breadboard/test pinout should only be kept as documentation/reference.
-
-## Hardware overview
-
-Typical hardware used in this project:
-
-- ESP32 development board
-- Selfsat-style flat satellite antenna
-- DiSEqC-compatible satellite motor for azimuth movement
-- elevation actuator
-- motor driver for the elevation actuator
-- MPU6050 / GY-521 sensor for elevation angle measurement
-- A3144 Hall sensors for center / east / west reference signals
-- AD8317 or AD8318 RF detector module
-- SAT splitter / tap depending on the RF setup
-- DC blocker between satellite signal path and RF detector
-- F-plug / SMA adapter and suitable coax cable
-- ST7735 1.44 inch TFT display
-- local push buttons
-- satellite receiver
-- optional 3D printed adapter parts and Hall sensor / magnet rings from the `STL/` folder
-
-> **Important:** The DC blocker must be installed before the RF detector input. The LNB supply voltage can be 13 V / 18 V. Without a DC blocker, the RF detector can be damaged.
+- ESP32 mini development board
+- 128 x 128 TFT display
+- MPU6050 / GY-521 sensor
+- AD8317 / AD8318-style RF detector
+- L298N motor driver for elevation
+- 12 V linear actuator for elevation
+- DiSEqC-compatible satellite motor for azimuth
+- LTV817 optocouplers for azimuth control interface
+- Hall sensors for azimuth reference and limit detection
+- Mini360 buck converter
+- MODE / PLUS / MINUS buttons
+- KiCad PCB for the current hardware layout
 
 ---
 
-## RF signal logic
+## RF signal concept
 
-The RF detector is evaluated inversely:
+SatAlign evaluates the RF detector output to recognize signal changes during the search workflow.
 
-- lower ADC / voltage value = stronger RF signal
-- higher ADC / voltage value = weaker or no usable RF signal
+The RF detector output is read by the ESP32 ADC. The software uses this value to detect possible satellite candidates and compare signal strength during movement.
 
-SatAlign uses practical threshold values from real-world testing. These values are not universal. They depend on the receiver, LNB, splitter, attenuation, cable length, RF detector module and wiring.
+Important:
 
-The current version uses RF values for:
+- lower ADC voltage can indicate stronger RF signal depending on the detector behavior
+- RF thresholds are centralized in `settings.cpp`
+- the receiver and RF signal path must be active during testing
+- a DC blocker must be used where required to protect the RF detector input
+- SatAlign evaluates signal strength, but it cannot identify the satellite name by itself
 
-- signal detection
-- signal comparison
-- candidate detection
-- candidate confirmation workflow
+Final satellite confirmation is still done by the user:
 
-It does **not** include a separate automatic signal optimization function. Final validation and possible mechanical fine adjustment remain the user's responsibility.
-
----
-
-## Basic operation
-
-1. Switch on the satellite receiver.
-2. Roughly point the antenna toward the south.
-3. Power on the SatAlign controller.
-4. Start the search workflow.
-5. SatAlign performs center alignment and evaluates RF signal changes.
-6. If a candidate is found, check the TV picture.
-7. Press **PLUS** if the candidate is Astra 19.2.
-8. Press **MINUS** if it is the wrong satellite.
-9. If Astra 19.2 is confirmed, SatAlign shows a final confirmation screen.
-10. The device can then be powered off or returned to the menu with a long MODE press.
+- **PLUS** = correct satellite / Astra 19.2 confirmed
+- **MINUS** = wrong satellite / continue search or restart relevant search step
 
 ---
 
-## Button concept
+## Current firmware behavior
 
-Typical local button behavior:
+Implemented in the tested baseline and retained for PCB development:
 
-- **PLUS**: select, increase, move or confirm depending on the current screen
-- **MINUS**: select, decrease, move or reject depending on the current screen
-- **MODE short**: confirm / start selected function
-- **MODE long**: cancel / return to menu depending on the current state
-
----
-
-## Web interface
-
-The mobile web interface provides access to:
-
-- main menu
-- align / center workflow
-- search workflow
-- manual control
-- status and diagnosis
-- RF signal display
-- SSID and IP information
-- ESP reset function
-- troubleshooting support
-
-The web UI is intended as a practical field interface for testing, diagnosis and operation.
+- automatic search workflow
+- RF candidate detection during normal search
+- RF candidate detection during center alignment
+- stricter candidate handling for very good center RF values
+- PLUS / MINUS candidate workflow
+- final green “Astra 19.2 found” confirmation screen
+- MODE long press returns to main menu
+- MPU fatal boot stop screen if the MPU6050 / GY-521 is missing
+- Info menu with SSID, IP address and ESP reset
+- OTA support through local `secrets.h`
 
 ---
 
-## Configuration and secrets
+## Firmware configuration
 
-Private access data is not stored in the repository.
+Private credentials are not stored in the repository.
 
-Before compiling, copy:
+Use:
 
 ```text
 secrets.example.h
 ```
 
-to:
+as a template and create your own local:
 
 ```text
 secrets.h
 ```
 
-Then enter your local Wi-Fi and OTA credentials in `secrets.h`.
+The local `secrets.h` must not be committed to GitHub.
 
-Example structure:
+Typical local values:
 
-```cpp
-#pragma once
-
-struct WifiCredential {
-  const char* ssid;
-  const char* password;
-};
-
-static const WifiCredential WIFI_NETWORKS[] = {
-  { "YOUR_WIFI_NAME", "YOUR_WIFI_PASSWORD" },
-};
-
-static const int WIFI_NETWORK_COUNT =
-  sizeof(WIFI_NETWORKS) / sizeof(WIFI_NETWORKS[0]);
-
-static const char* WIFI_HOSTNAME = "sat-tracker";
-static const char* OTA_PASSWORD = "YOUR_OTA_PASSWORD";
-```
-
-`secrets.h` must remain local and must not be committed to GitHub.
+- WiFi SSID
+- WiFi password
+- OTA password
+- hostname
 
 ---
 
-## Recommended repository structure
+## PCB and manufacturing status
 
-```text
-SatAlign_ESP32_V3/
-├── SatAlign_ESP32_V3.ino
-├── live_runtime.cpp / .h
-├── display_ui.cpp / .h
-├── web_server.cpp / .h
-├── rf_detector.cpp / .h
-├── azimuth_control.cpp / .h
-├── elevation_control.cpp / .h
-├── sensor_mpu6050.cpp / .h
-├── config.h
-├── pins.h
-├── settings.cpp / .h
-├── secrets.example.h
-├── docs/
-└── tools/
-```
+Before ordering or assembling the PCB, always run:
 
-Test and utility sketches should be placed in `tools/`.
+- KiCad Electrical Rules Checker (ERC)
+- KiCad Design Rules Checker (DRC)
+- zone refill before DRC
+- Gerber viewer inspection
+- drill file inspection
+- diode polarity check
+- electrolytic capacitor polarity check
+- connector orientation check
+- comparison between `pins.h`, schematic and PCB
 
-Additional documentation can be placed in `docs/`.
+The V3.0.3 RC1 PCB pinout version should only become a final release after the assembled PCB has been practically validated.
 
 ---
 
-## Safety notes
+## Version guidance
 
-This is a DIY project. Use it at your own risk.
+Use the versions as follows:
 
-Before operating the system, check carefully:
-
-- motor direction
-- DiSEqC motor behavior
-- elevation actuator limits
-- Hall sensor states
-- RF detector wiring
-- DC blocker placement
-- LNB voltage path
-- mechanical end stops
-- power supply stability
-- all cables and connectors
-
-Never connect the RF detector directly to a path that may carry LNB supply voltage without proper protection.
+| Version / branch | Status | Recommended use |
+|---|---|---|
+| V3.0.2 | tested and built stable version | stable reference |
+| pcb-pinout-v3.0.3 | current PCB development branch | PCB validation work |
+| V3.0.3 RC1 | compiled release candidate | not yet practically PCB-tested |
 
 ---
 
-## Roadmap / ideas for future improvements
+## License and disclaimer
 
-Possible future improvements:
+This project is provided as an open DIY project.
 
-- improved diagnostic web UI
-- clearer RF threshold tuning page
-- additional AZ position diagnostics
-- more detailed troubleshooting messages
-- complete wiring documentation
-- structured installation and field-test guide
-- cleanup of older helper modules after further stable testing
+You may study, modify and improve the project. Use it at your own risk.
 
----
-
-## License and reuse
-
-This is a personal open DIY project. You are welcome to study, modify, adapt and improve the code for your own experiments and setups.
-
-No warranty is provided. The author is not responsible for damage caused by wiring errors, incorrect RF connections, mechanical movement, motor control issues or unsafe operation.
-
----
-
-## Credits
-
-Project idea, practical testing, hardware decisions and requirements: **Hans-Peter Voß**
-
-Programming support, comments and documentation assistance: **ChatGPT GPT-5.5**
+Satellite systems, motor drivers, 12 V wiring, RF components and outdoor mechanical structures can cause damage if wired or used incorrectly. Always verify wiring, voltage levels, polarity, current ratings and mechanical safety before powering the system.
