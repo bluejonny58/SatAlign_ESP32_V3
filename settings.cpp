@@ -283,6 +283,27 @@ float RF_TV_STRONG_MAX_ADC = 750.0f;   // unterhalb: sehr guter/Peak-naher Berei
 float AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT = 75.0f;
 
 // -----------------------------------------------------
+// V3_0_4: Dynamische RF-Referenz aus der Centerfahrt
+// -----------------------------------------------------
+// Kommentarstand: V3_0_4 Dynamic RF Reference
+//
+// Waehrend einer echten Mittenfahrt werden die staerksten RF-Prozentwerte
+// gesammelt. Nach erfolgreichem Abschluss wird daraus eine optionale
+// dynamische Referenz fuer die anschliessende AUTO-Suchfahrt berechnet.
+//
+// Sicherheitsprinzip:
+// - Die Referenz ist optional.
+// - Sie wird nur genutzt, wenn sie plausibel stark ist.
+// - Die normale DROP_ADC-Kandidatenerkennung bleibt aktiv.
+// - Die dynamische Schwelle darf nie unter AUTO_RF_MIN_CANDIDATE_PERCENT fallen.
+// - Es wird weiterhin nichts in NVS/Preferences gespeichert.
+bool  AUTO_CENTER_RF_REFERENCE_ENABLED = true;
+int   AUTO_CENTER_RF_REFERENCE_TOP_COUNT = 5;
+float AUTO_CENTER_RF_REFERENCE_MIN_PERCENT = 65.0f;
+float AUTO_CENTER_RF_REFERENCE_TOLERANCE_PERCENT = 8.0f;
+float AUTO_RF_MIN_CANDIDATE_PERCENT = 60.0f;
+
+// -----------------------------------------------------
 // RF-Referenz- und AUTO-Schwellwerte
 // -----------------------------------------------------
 // Kommentarstand: V3_01
@@ -451,6 +472,13 @@ static void applyDefaultSettings() {
   // in live_runtime.cpp durchsuchen zu muessen.
   AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT = 75.0f;
 
+  // V3_0_4: Dynamische RF-Referenz aus der Centerfahrt.
+  AUTO_CENTER_RF_REFERENCE_ENABLED = true;
+  AUTO_CENTER_RF_REFERENCE_TOP_COUNT = 5;
+  AUTO_CENTER_RF_REFERENCE_MIN_PERCENT = 65.0f;
+  AUTO_CENTER_RF_REFERENCE_TOLERANCE_PERCENT = 8.0f;
+  AUTO_RF_MIN_CANDIDATE_PERCENT = 60.0f;
+
   // V3_01: Zentrale RF-/AUTO-Schwellwerte.
   // Diese Werte werden bewusst im Code gesetzt und nicht im ESP32-Flash
   // gespeichert. Dadurch sind Testaenderungen nachvollziehbar und reproduzierbar.
@@ -601,6 +629,16 @@ void printSettingsToSerial() {
   Serial.println(RF_TV_STRONG_MAX_ADC, 1);
   Serial.print("AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT = ");
   Serial.println(AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT, 1);
+  Serial.print("AUTO_CENTER_RF_REFERENCE_ENABLED = ");
+  Serial.println(AUTO_CENTER_RF_REFERENCE_ENABLED ? "true" : "false");
+  Serial.print("AUTO_CENTER_RF_REFERENCE_TOP_COUNT = ");
+  Serial.println(AUTO_CENTER_RF_REFERENCE_TOP_COUNT);
+  Serial.print("AUTO_CENTER_RF_REFERENCE_MIN_PERCENT = ");
+  Serial.println(AUTO_CENTER_RF_REFERENCE_MIN_PERCENT, 1);
+  Serial.print("AUTO_CENTER_RF_REFERENCE_TOLERANCE_PERCENT = ");
+  Serial.println(AUTO_CENTER_RF_REFERENCE_TOLERANCE_PERCENT, 1);
+  Serial.print("AUTO_RF_MIN_CANDIDATE_PERCENT = ");
+  Serial.println(AUTO_RF_MIN_CANDIDATE_PERCENT, 1);
 
   Serial.print("RF_WEAK_REFERENCE_ADC = ");
   Serial.println(RF_WEAK_REFERENCE_ADC, 1);

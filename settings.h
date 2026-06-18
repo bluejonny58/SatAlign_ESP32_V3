@@ -57,6 +57,17 @@ extern float RF_TV_STRONG_MAX_ADC;
 // die Centerfahrt stoppen. 0 % = schwach/kein Signal, 100 % = sehr gut.
 extern float AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT;
 
+// V3_0_4: Dynamische RF-Referenz aus der Centerfahrt.
+// Waehrend der Mittenfahrt werden die besten RF-Prozentwerte gesammelt.
+// Wenn diese Referenz plausibel stark ist, hebt sie die Kandidatenschwelle
+// der anschliessenden Suchfahrt dynamisch an. Die normale DROP-Logik bleibt
+// weiterhin aktiv und es gibt einen Fallback auf feste Mindestwerte.
+extern bool  AUTO_CENTER_RF_REFERENCE_ENABLED;
+extern int   AUTO_CENTER_RF_REFERENCE_TOP_COUNT;
+extern float AUTO_CENTER_RF_REFERENCE_MIN_PERCENT;
+extern float AUTO_CENTER_RF_REFERENCE_TOLERANCE_PERCENT;
+extern float AUTO_RF_MIN_CANDIDATE_PERCENT;
+
 // V3_01: Zentrale RF-Referenz- und AUTO-Schwellwerte.
 // Definition und Defaultwerte liegen in settings.cpp.
 // Diese Werte koennen bei Aussentests manuell angepasst werden, ohne
