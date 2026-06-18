@@ -1763,16 +1763,19 @@ static void centerRfReferenceFinalize(const char* reason) {
     }
   }
 
-  if (validCount <= 0) {
+  if (validCount < AUTO_CENTER_RF_REFERENCE_MIN_VALID_SAMPLES) {
     centerRfReferenceUsable = false;
     centerRfReferencePercent = 0.0f;
     centerRfDynamicCandidateMinPercent = AUTO_RF_MIN_CANDIDATE_PERCENT;
-    Serial.print("CENTER RF REF: keine brauchbare Referenz");
+    Serial.print("CENTER RF REF: zu wenige gueltige Top-Werte");
     if (reason && reason[0]) {
       Serial.print(" | ");
       Serial.print(reason);
     }
-    Serial.println();
+    Serial.print(" | Top=");
+    Serial.print(validCount);
+    Serial.print("/");
+    Serial.println(AUTO_CENTER_RF_REFERENCE_MIN_VALID_SAMPLES);
     return;
   }
 
@@ -1808,6 +1811,65 @@ static void centerRfReferenceInvalidate(const char* reason) {
     Serial.print(reason);
   }
   Serial.println();
+}
+
+static bool candidatePassesMinimumRfPercent() {
+  const float percent = rfGetSignalPercent();
+  if (percent >= AUTO_RF_MIN_CANDIDATE_PERCENT) {
+    return true;
+  }
+
+  if (millis() - autoLastRfDiagMs >= AUTO_RF_DIAG_INTERVAL_MS) {
+    autoLastRfDiagMs = millis();
+    Serial.print("AUTO RF: Kandidat unter fester Mindeststaerke | RF%=");
+    Serial.print(percent, 0);
+    Serial.print(" < Min%=");
+    Serial.print(AUTO_RF_MIN_CANDIDATE_PERCENT, 0);
+    Serial.print(" | DROP=");
+    Serial.println(autoRfDropAdc, 1);
+  }
+
+  return false;
+}
+
+static void autoResetNormalCandidateConfirm(const char* reason) {
+  if (autoCandidateConfirmCounter > 0) {
+    Serial.print("AUTO RF: normale Kandidatenbestaetigung verworfen");
+    if (reason && reason[0]) {
+      Serial.print(" | ");
+      Serial.print(reason);
+    }
+    Serial.print(" | RF%=");
+    Serial.print(rfGetSignalPercent(), 0);
+    Serial.print(" | DROP=");
+    Serial.println(autoRfDropAdc, 1);
+  }
+  autoCandidateConfirmCounter = 0;
+  autoCandidateNextConfirmAtMs = 0;
+}
+
+static bool autoConfirmNormalRfCandidate() {
+  const unsigned long now = millis();
+
+  if (autoCandidateNextConfirmAtMs == 0 || now >= autoCandidateNextConfirmAtMs) {
+    if (autoCandidateConfirmCounter < 255) {
+      autoCandidateConfirmCounter++;
+    }
+    autoCandidateNextConfirmAtMs = now + AUTO_CANDIDATE_CONFIRM_INTERVAL_MS;
+
+    Serial.print("AUTO RF: Kandidat bestaetigt ");
+    Serial.print(autoCandidateConfirmCounter);
+    Serial.print("/");
+    Serial.print(AUTO_CANDIDATE_CONFIRM_COUNT);
+    Serial.print(" | RF%=");
+    Serial.print(rfGetSignalPercent(), 0);
+    Serial.print(" | DROP=");
+    Serial.print(autoRfDropAdc, 1);
+    Serial.print(" | DynRef=");
+    Serial.println(centerRfReferenceUsable ? "JA" : "NEIN");
+  }
+
+  return autoCandidateConfirmCounter >= AUTO_CANDIDATE_CONFIRM_COUNT;
 }
 
 static bool candidatePassesDynamicCenterReference() {
@@ -1867,25 +1929,41 @@ static bool autoServiceRfAndCandidate(AutoState resumeState) {
   // Gesperrte falsche Satellitenbereiche werden beim erneuten Durchfahren
   // ignoriert. Dadurch kann MINUS einen Kandidatenbereich wirklich ueberspringen.
   if (isBlockedAzPosition(azPositionSteps)) {
+    autoResetNormalCandidateConfirm("gesperrter AZ-Bereich");
     return false;
   }
 
-  if (autoRfDropAdc >= AUTO_RF_CANDIDATE_DROP_ADC) {
-    // V3_0_4: Optionaler Zusatzfilter aus der Centerfahrt.
-    // Die bewaehrte DROP_ADC-Erkennung bleibt die Grundbedingung. Wenn waehrend
-    // der vorherigen Mittenfahrt aber eine plausible RF-Referenz ermittelt wurde,
-    // muss der Kandidat zusaetzlich in etwa dieses aktuelle Signalmindestniveau
-    // erreichen. Bei fehlender/schwacher Referenz greift automatisch die alte
-    // feste DROP_ADC-Logik.
-    if (!candidatePassesDynamicCenterReference()) {
-      return false;
-    }
-
-    autoStartCandidateHold(resumeState, centerRfReferenceUsable ? "RF_DROP_CENTER_REF" : "RF_DROP");
-    return true;
+  // V3_0_4_FIX: Die normale Ost-/West-Suche darf nicht mehr bei jedem kleinen
+  // RF-Peak stoppen. Ein Kandidat braucht jetzt immer drei Schutzbedingungen:
+  //   1. DROP_ADC muss ueber der Kandidatenschwelle liegen.
+  //   2. RF% muss ueber der festen Mindeststaerke liegen.
+  //   3. Falls eine Center-Referenz aktiv ist, muss RF% auch deren dynamische
+  //      Mindestschwelle erreichen.
+  // Danach muss die Bedingung mehrfach zeitlich bestaetigt werden.
+  const bool dropOk = autoRfDropAdc >= AUTO_RF_CANDIDATE_DROP_ADC;
+  if (!dropOk) {
+    autoResetNormalCandidateConfirm("DROP zu klein");
+    return false;
   }
 
-  return false;
+  if (!candidatePassesMinimumRfPercent()) {
+    autoResetNormalCandidateConfirm("RF-Prozent zu klein");
+    return false;
+  }
+
+  if (!candidatePassesDynamicCenterReference()) {
+    autoResetNormalCandidateConfirm("unter Center-Referenz");
+    return false;
+  }
+
+  if (!autoConfirmNormalRfCandidate()) {
+    return false;
+  }
+
+  autoCandidateConfirmCounter = 0;
+  autoCandidateNextConfirmAtMs = 0;
+  autoStartCandidateHold(resumeState, centerRfReferenceUsable ? "RF_STABLE_CENTER_REF" : "RF_STABLE_MIN_PERCENT");
+  return true;
 }
 
 static bool autoServiceRfCandidateDuringCenter() {

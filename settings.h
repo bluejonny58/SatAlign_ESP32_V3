@@ -64,6 +64,7 @@ extern float AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT;
 // weiterhin aktiv und es gibt einen Fallback auf feste Mindestwerte.
 extern bool  AUTO_CENTER_RF_REFERENCE_ENABLED;
 extern int   AUTO_CENTER_RF_REFERENCE_TOP_COUNT;
+extern int   AUTO_CENTER_RF_REFERENCE_MIN_VALID_SAMPLES;
 extern float AUTO_CENTER_RF_REFERENCE_MIN_PERCENT;
 extern float AUTO_CENTER_RF_REFERENCE_TOLERANCE_PERCENT;
 extern float AUTO_RF_MIN_CANDIDATE_PERCENT;
