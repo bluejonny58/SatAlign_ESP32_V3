@@ -1,14 +1,14 @@
 /*
-  SatAlign V3 - Hauptsketch
+  SatAlign V3.1.5 - Hauptsketch
   ------------------------------------------------------------
   Startet Hardware, WLAN, OTA, Webserver, RF-Detector und Runtime.
   Der Sketch verbindet die Module, enthaelt aber moeglichst wenig eigene
-  Fachlogik. Neue Projektkommentare verwenden ab jetzt die Versionsnummer V3.
+  Fachlogik. Aktueller Projektstand: V3.1.5.
 */
 
 /*
   SatAlign ESP32 - Hauptsketch
-  Version: V3
+  Version: V3.1.5
   ---------------------------------------------------------------------------
   Einstiegspunkt des ESP32-Projekts.
 
@@ -53,10 +53,11 @@ static char signalTextBuffer[32] = { 0 };
 static const char* signalTextFromNorm(float norm) {
   const float percent = norm * 100.0f;
 
-  if (percent >= 75.0f) return "sehr gut";
-  if (percent >= 50.0f) return "gut";
-  if (percent >= 25.0f) return "schwach";
-  return "schlecht";
+  // V3.1.5: dieselben sichtbaren Qualitaetsstufen wie in Web-UI/Runtime.
+  if (percent >= RF_QUALITY_STRONG_MIN_PERCENT) return "sehr gut";
+  if (percent >= RF_QUALITY_GOOD_MIN_PERCENT)   return "gut";
+  if (percent >= RF_QUALITY_USABLE_MIN_PERCENT) return "brauchbar";
+  return "schwach";
 }
 
 static UiMode currentUiMode() {

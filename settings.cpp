@@ -3,7 +3,7 @@
   ------------------------------------------------------------
   Hier liegen die zentralen Test- und Kalibrierwerte des Projekts:
   - Standard-Winkel beim Start
-  - Startfenster fuer manuelle Winkeleinstellung
+  - Elevationskorrektur in den normalen Menues
   - RF-Grenzwerte aus den Aussentests
 
   Die Werte werden bewusst im Sketch gehalten und nicht dauerhaft in NVS
@@ -223,6 +223,15 @@ unsigned long WEB_EL_PULSE_MS = 250;
 // PWM für dieselben manuellen Web-/Tasterkommandos
 int WEB_EL_PWM = 110;
 
+// Feinschritte fuer die Web-UI.
+// Diese Werte sind bewusst deutlich kleiner als die normalen manuellen
+// Bewegungen und dienen nur der letzten Signaloptimierung.
+// Startwert bewusst sehr klein gewaehlt, da beide Achsen mechanisch untersetzt
+// sind. Fuer Feldtests kann die Schrittweite zentral hier angepasst werden.
+unsigned long WEB_AZ_FINE_PULSE_MS = 50;
+unsigned long WEB_EL_FINE_PULSE_MS = 50;
+int WEB_EL_FINE_PWM = 90;
+
 // -----------------------------------------------------
 // 3-Taster-Logik
 // -----------------------------------------------------
@@ -246,21 +255,26 @@ int RF_ADC_SAMPLES_PER_CYCLE = 32;
 float RF_FILTER_ALPHA = 0.50f;
 
 // -----------------------------------------------------
-// RF-Bewertung aus Aussentest / TV-Bild-Grenzen
+// RF-Qualitaetsstufen fuer Anzeige / Bedienung
 // -----------------------------------------------------
-// Kommentarstand: V3
+// V3.1.5: Die Nutzerbewertung wird konsequent aus dem bereits normierten
+// RF-Prozentwert abgeleitet. Damit passt die Ampel exakt zur festgelegten
+// 80-%-Grenze der normalen AUTO-Kandidatenerkennung und ist fuer den Nutzer
+// unmittelbar verstaendlich. Die Werte beeinflussen die AUTO-Logik NICHT.
 //
-// Diese ADC-Grenzen stammen aus den praktischen Aussentests mit eingeschaltetem
-// Sat-Receiver und beobachtetem TV-Bild. Sie dienen NICHT als Sperre fuer die
-// Benutzerentscheidung: Wenn der Nutzer im Kandidatenmodus PLUS drueckt, wird
-// der Satellit bestaetigt. Die Werte sind nur eine Ampel fuer Anzeige und
-// Diagnose.
-//
-// Wichtig fuer den aktuellen AD8317/AD8318-Aufbau:
-// kleinerer ADC-/RF-Wert = staerkeres Signal.
-float RF_TV_USABLE_MAX_ADC = 900.0f;   // oberhalb: Signal erkannt, aber eher schwach
-float RF_TV_GOOD_MAX_ADC   = 800.0f;   // unterhalb: guter Kandidat
-float RF_TV_STRONG_MAX_ADC = 750.0f;   // unterhalb: sehr guter/Peak-naher Bereich
+// < 80 %  = schwach
+// 80-<85 % = brauchbar
+// 85-<95 % = gut
+// >=95 %   = sehr gut
+float RF_QUALITY_USABLE_MIN_PERCENT = 80.0f;
+float RF_QUALITY_GOOD_MIN_PERCENT   = 85.0f;
+float RF_QUALITY_STRONG_MIN_PERCENT = 95.0f;
+
+// Historische ADC-Grenzen bleiben vorerst als Diagnose-/Kompatibilitaetswerte
+// erhalten, werden fuer die Nutzerbewertung aber nicht mehr verwendet.
+float RF_TV_USABLE_MAX_ADC = 900.0f;
+float RF_TV_GOOD_MAX_ADC   = 800.0f;
+float RF_TV_STRONG_MAX_ADC = 750.0f;
 
 // -----------------------------------------------------
 // AUTO-Centerfahrt: Mindestwert fuer wirklich gute Signale
@@ -463,6 +477,9 @@ static void applyDefaultSettings() {
   // Web / Taster
   WEB_EL_PULSE_MS = 250;
   WEB_EL_PWM = 110;
+  WEB_AZ_FINE_PULSE_MS = 50;
+  WEB_EL_FINE_PULSE_MS = 50;
+  WEB_EL_FINE_PWM = 90;
 
   BTN_DEBOUNCE_MS = 35;
   BTN_MODE_LONGPRESS_MS = 700;
@@ -476,6 +493,9 @@ static void applyDefaultSettings() {
   RF_TV_USABLE_MAX_ADC = 900.0f;
   RF_TV_GOOD_MAX_ADC   = 800.0f;
   RF_TV_STRONG_MAX_ADC = 750.0f;
+  RF_QUALITY_USABLE_MIN_PERCENT = 80.0f;
+  RF_QUALITY_GOOD_MIN_PERCENT   = 85.0f;
+  RF_QUALITY_STRONG_MIN_PERCENT = 95.0f;
 
   // V3_01: Mindest-Prozentwert fuer die Kandidatenerkennung waehrend
   // der ersten AUTO-Mittenfahrt. Zentral in settings.cpp, damit der
@@ -621,6 +641,12 @@ void printSettingsToSerial() {
   Serial.println(WEB_EL_PULSE_MS);
   Serial.print("WEB_EL_PWM = ");
   Serial.println(WEB_EL_PWM);
+  Serial.print("WEB_AZ_FINE_PULSE_MS = ");
+  Serial.println(WEB_AZ_FINE_PULSE_MS);
+  Serial.print("WEB_EL_FINE_PULSE_MS = ");
+  Serial.println(WEB_EL_FINE_PULSE_MS);
+  Serial.print("WEB_EL_FINE_PWM = ");
+  Serial.println(WEB_EL_FINE_PWM);
 
   Serial.print("BTN_DEBOUNCE_MS = ");
   Serial.println(BTN_DEBOUNCE_MS);
@@ -638,6 +664,12 @@ void printSettingsToSerial() {
   Serial.println(RF_TV_GOOD_MAX_ADC, 1);
   Serial.print("RF_TV_STRONG_MAX_ADC = ");
   Serial.println(RF_TV_STRONG_MAX_ADC, 1);
+  Serial.print("RF_QUALITY_USABLE_MIN_PERCENT = ");
+  Serial.println(RF_QUALITY_USABLE_MIN_PERCENT, 1);
+  Serial.print("RF_QUALITY_GOOD_MIN_PERCENT = ");
+  Serial.println(RF_QUALITY_GOOD_MIN_PERCENT, 1);
+  Serial.print("RF_QUALITY_STRONG_MIN_PERCENT = ");
+  Serial.println(RF_QUALITY_STRONG_MIN_PERCENT, 1);
   Serial.print("AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT = ");
   Serial.println(AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT, 1);
   Serial.print("AUTO_CENTER_RF_REFERENCE_ENABLED = ");

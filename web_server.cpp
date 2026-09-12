@@ -118,6 +118,17 @@ static String manualControlButton(const String& id,
          "' onclick=\"return sendManualCmd('" + apiHref + "')\">" + esc(label) + "</a>";
 }
 
+// Kleiner Feinschritt-Button fuer die manuelle Web-UI.
+// Im Gegensatz zu den normalen manuellen Buttons startet er keine Dauerfahrt,
+// sondern genau einen kurzen Motorpuls. Danach bleibt die Achse automatisch stehen.
+static String fineStepButton(const String& id,
+                             const String& fallbackHref,
+                             const String& apiHref,
+                             const String& label) {
+  return "<a id='" + id + "' class='btn gray' href='" + fallbackHref +
+         "' onclick=\"return sendFineCmd('" + apiHref + "','" + id + "')\">" + esc(label) + "</a>";
+}
+
 // Hauptmenue-Kachel.
 // Wird nur fuer echte Navigation verwendet, nicht fuer reine Statusanzeigen.
 // Dadurch bleibt die visuelle Trennung zwischen Hauptaktionen und Diagnosewerten
@@ -222,24 +233,14 @@ static String navLink(const String& href, const String& label, const String& pag
   return "<a class='" + cls + "' href='" + href + "'>" + esc(label) + "</a>";
 }
 
-// Vereinfacht den RF-ADC-Wert fuer den Balken im Web-UI.
-// Kommentarstand: V3
-// Die Stufen orientieren sich an den Aussentests mit realem TV-Bild.
-// kleinerer ADC-Wert = staerkeres Signal. Diese Anzeige ist nur eine Ampel;
-// sie blockiert PLUS bewusst nicht; der Nutzer entscheidet am TV/Receiver.
-// V3: "schwach" wird eindeutig rot dargestellt. Gelb/Orange ist nur fuer
-// "brauchbar" reserviert, damit kein Signalzustand falsch positiv wirkt.
-//
-// V3: Die Balkenlaenge ist bewusst nicht linear zum ADC-Rohwert. Beim
-// AD8317/AD8318 bedeutet ein kleinerer ADC-Wert ein staerkeres Signal. Ohne
-// Antenne bzw. bei eindeutig schwachem Signal soll der rote Balken deshalb
-// nur sehr kurz erscheinen. Ein langer roter Balken wirkte optisch wie
-// "noch recht viel Signal" und war fuer die Bedienung irrefuehrend.
-static int rfPercentFromAdc(float adc) {
-  if (adc <= RF_TV_STRONG_MAX_ADC) return 100;
-  if (adc <= RF_TV_GOOD_MAX_ADC)   return 82;
-  if (adc <= RF_TV_USABLE_MAX_ADC) return 58;
-  return 8;
+// Liefert fuer die Web-Anzeige den bereits zentral normierten RF-Prozentwert.
+// V3.1.5: Keine zweite, ADC-basierte Pseudo-Prozentskala mehr. So sehen Nutzer
+// auf Suchen, Status und Feinjustierung denselben 0...100-%-Wert.
+static int rfPercentForWeb() {
+  float percent = rfGetSignalPercent();
+  if (percent < 0.0f) percent = 0.0f;
+  if (percent > 100.0f) percent = 100.0f;
+  return (int)(percent + 0.5f);
 }
 
 static String rfColorFromQuality(const String& q) {
@@ -247,6 +248,17 @@ static String rfColorFromQuality(const String& q) {
   if (cls == "good") return "#2e9d64";
   if (cls == "warn") return "#f0a03a";
   return "#d9534f";
+}
+
+// Spreizt ausschliesslich fuer die manuelle Feinkorrektur den interessanten
+// RF-Arbeitsbereich 80 ... 100 % auf eine 0 ... 100-%-OPT-Skala.
+// WICHTIG: Dieser Wert ist reine Anzeigehilfe und wird von AUTO, RF-Schwellen
+// und Motorlogik nicht verwendet.
+static float fineOptPercent(float rfPercent) {
+  float opt = (rfPercent - 80.0f) * 5.0f;
+  if (opt < 0.0f) opt = 0.0f;
+  if (opt > 100.0f) opt = 100.0f;
+  return opt;
 }
 
 // Zentrale CSS-Definition fuer alle Web-Seiten.
@@ -276,7 +288,7 @@ static String commonCss() {
   css += ".btn{display:flex;align-items:center;justify-content:center;box-sizing:border-box;width:100%;border:3px solid var(--buttonLine);border-radius:17px;padding:15px 8px;font-weight:900;font-size:1.02rem;color:#fff;cursor:pointer;min-height:54px;text-align:center;transition:background .10s ease,box-shadow .10s ease,transform .08s ease,filter .1s ease;box-shadow:0 3px 0 rgba(23,50,77,.28),0 7px 16px rgba(30,60,90,.10)}.btn:active{transform:scale(.975);filter:brightness(.96);box-shadow:0 1px 0 rgba(23,50,77,.32),0 4px 10px rgba(30,60,90,.10)}.primary{background:linear-gradient(135deg,var(--blue),var(--blue2));border-color:#174f80}.green{background:linear-gradient(135deg,#2ea66a,#49bf80);border-color:#146d40}.greenLight{background:linear-gradient(135deg,#86e39b,#c8f7d0);color:#145c2c;border-color:#24964a}.orange{background:linear-gradient(135deg,#f1a33b,#ffc063);color:#5e3600;border-color:#a85f00}.orangeLight{background:linear-gradient(135deg,#ffd89a,#fff0cf);color:#684100;border-color:#bd7a00}.red{background:linear-gradient(135deg,#d9534f,#ef7a73);border-color:#8f211c}.redLight{background:linear-gradient(135deg,#f08a84,#ffd0cc);color:#84201a;border-color:#a9312a}.gray{background:linear-gradient(135deg,#eef3f8,#cfdbe6);color:#405366;border-color:#71879b}.violet{background:linear-gradient(135deg,#7d63c7,#9a82e0);border-color:#4c348e}.activeMove{background:linear-gradient(135deg,#25a85f,#4cc681);border-color:#0f6a37;box-shadow:0 0 0 5px rgba(46,157,100,.20),0 3px 0 rgba(15,106,55,.30)}.activeStop{background:linear-gradient(135deg,#d9534f,#ef7a73);border-color:#8f211c;box-shadow:0 0 0 5px rgba(217,83,79,.23),0 3px 0 rgba(143,33,28,.30)}.disabled{background:#eef2f6;color:#7f8c99;border:3px dashed #94a6b8;cursor:not-allowed;box-shadow:none}";
   css += "a{text-decoration:none}.grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.ctrl3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.stack{display:grid;gap:10px}.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.tile{display:flex;align-items:center;gap:12px;border-radius:22px;padding:17px;background:#fff;border:3px solid var(--buttonLineSoft);box-shadow:0 4px 0 rgba(23,50,77,.18),var(--shadow);color:var(--ink);min-height:92px}.tile b{display:block;font-size:1.08rem}.tile span{display:block;color:var(--muted);font-size:.9rem;margin-top:3px}.tileNo{display:flex;align-items:center;justify-content:center;width:46px;height:46px;border-radius:16px;color:#fff;font-weight:900;font-size:1.2rem;border:2px solid rgba(23,50,77,.35)}.t1 .tileNo{background:linear-gradient(135deg,var(--blue),var(--blue2))}.t2 .tileNo{background:linear-gradient(135deg,var(--violet),#9a82e0)}.t3 .tileNo{background:linear-gradient(135deg,var(--green),#55c989)}.t4 .tileNo{background:linear-gradient(135deg,var(--gray),#9eb0bf)}.t5 .tileNo{background:linear-gradient(135deg,var(--orange),#ffc063)}";
   css += ".chips{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;margin:8px 0}.chip{display:inline-block;border-radius:999px;padding:7px 10px;font-weight:900;font-size:.88rem}.good{background:#dff4e8;color:#17613b}.warn{background:#fff1d7;color:#8a5200}.bad{background:#ffe0de;color:#9a1c18}.blue{background:#dceeff;color:#155b98}.orange.chip{background:#ffe8c6;color:#8a4b00}.violet.chip{background:#ece5ff;color:#4d3197}.neutral{background:#edf2f7;color:#405366}";
-  css += ".row{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid #edf2f7;padding:8px 0}.row span{color:var(--muted)}.row b{text-align:right;color:#1f3448}.row.hallCenter{background:#e7f8ee!important;border:3px solid #73c98c!important;border-radius:12px;padding:12px 14px!important;margin:8px 0!important;box-shadow:0 2px 0 rgba(23,97,59,.16)}.row.hallCenter span,.row.hallCenter b{color:#17613b!important}.row.hallLimit{background:#ffe3e0!important;border:3px solid #ef8f88!important;border-radius:12px;padding:12px 14px!important;margin:8px 0!important;box-shadow:0 2px 0 rgba(141,34,27,.16)}.row.hallLimit span,.row.hallLimit b{color:#8d221b!important}.row.hallNeutral{background:#f8fafc!important;border:2px solid #dbe6ef!important;border-radius:12px;padding:12px 14px!important;margin:8px 0!important}.bigRf{text-align:center;font-size:1.28rem;font-weight:900;color:#17324d}.bar{height:22px;background:#e6edf5;border-radius:999px;overflow:hidden;margin-top:10px}.fill{height:100%;border-radius:999px;transition:width .18s ease}.note{background:#f0f6fc;border-radius:14px;padding:11px;color:#4a6177;line-height:1.38;margin-top:9px}.warnbox{background:#fff0ed;color:#8c2b22}.orangebox{background:#fff2dc;color:#7a4700;border-left:6px solid #f1a33b}.okbox{background:#edf9f1;color:#17613b}.successbox{background:linear-gradient(135deg,#bff2cc,#e7faec);color:#0f572b;border:3px solid #28a85b;box-shadow:0 0 0 6px rgba(40,168,91,.18)}.infoPanel{background:#f7fafc;border:1px solid #d9e5ef;border-left:6px solid #9eb0bf;border-radius:16px;padding:12px;margin-top:10px;color:#4a6177}.infoPanel b{color:#1f3448}.statusGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:10px}.statusBox{background:#f8fafc;border:1px solid #dfe9f2;border-left:6px solid #aebdcc;border-radius:16px;padding:12px;color:#4a6177}.statusBox span{display:block;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:#6b7d8f;font-weight:900}.statusBox b{display:block;margin-top:4px;font-size:1.1rem;color:#1f3448}.infoPill{display:flex;align-items:center;justify-content:center;border-radius:17px;padding:15px 8px;min-height:54px;font-weight:900;text-align:center}.infoGreen{background:#e3f8e9;color:#17613b;border:1px solid #8bd8a3}.infoOrange{background:#fff0d7;color:#7a4700;border:1px solid #efb95e}.infoRed{background:#ffe7e4;color:#8d221b;border:1px solid #f19a94}.infoBlue{background:#e8f3ff;color:#155b98;border:1px solid #aad0f2}.mini{font-size:.86rem;color:var(--muted)}.sectionHint{color:var(--muted);font-size:.92rem;margin:-4px 0 10px}.pageLead{font-size:.98rem;color:#4a6177;line-height:1.42}";
+  css += ".row{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid #edf2f7;padding:8px 0}.row span{color:var(--muted)}.row b{text-align:right;color:#1f3448}.row.hallCenter{background:#e7f8ee!important;border:3px solid #73c98c!important;border-radius:12px;padding:12px 14px!important;margin:8px 0!important;box-shadow:0 2px 0 rgba(23,97,59,.16)}.row.hallCenter span,.row.hallCenter b{color:#17613b!important}.row.hallLimit{background:#ffe3e0!important;border:3px solid #ef8f88!important;border-radius:12px;padding:12px 14px!important;margin:8px 0!important;box-shadow:0 2px 0 rgba(141,34,27,.16)}.row.hallLimit span,.row.hallLimit b{color:#8d221b!important}.row.hallNeutral{background:#f8fafc!important;border:2px solid #dbe6ef!important;border-radius:12px;padding:12px 14px!important;margin:8px 0!important}.bigRf{text-align:center;font-size:1.28rem;font-weight:900;color:#17324d}.bar{height:22px;background:#e6edf5;border-radius:999px;overflow:hidden;margin-top:10px}.fill{height:100%;border-radius:999px;transition:width .18s ease}.note{background:#f0f6fc;border-radius:14px;padding:11px;color:#4a6177;line-height:1.38;margin-top:9px}.warnbox{background:#fff0ed;color:#8c2b22}.orangebox{background:#fff2dc;color:#7a4700;border-left:6px solid #f1a33b}.okbox{background:#edf9f1;color:#17613b}.successbox{background:linear-gradient(135deg,#bff2cc,#e7faec);color:#0f572b;border:3px solid #28a85b;box-shadow:0 0 0 6px rgba(40,168,91,.18)}.infoPanel{background:#f7fafc;border:1px solid #d9e5ef;border-left:6px solid #9eb0bf;border-radius:16px;padding:12px;margin-top:10px;color:#4a6177}.infoPanel b{color:#1f3448}.statusGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:10px}.statusBox{background:#f8fafc;border:1px solid #dfe9f2;border-left:6px solid #aebdcc;border-radius:16px;padding:12px;color:#4a6177}.statusBox span{display:block;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:#6b7d8f;font-weight:900}.statusBox b{display:block;margin-top:4px;font-size:1.1rem;color:#1f3448}.infoPill{display:flex;align-items:center;justify-content:center;border-radius:17px;padding:15px 8px;min-height:54px;font-weight:900;text-align:center}.fineSignalBox{display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:17px;padding:8px 6px;min-height:54px;background:#e8f3ff;color:#155b98;border:2px solid #84bbe9;font-weight:900;text-align:center;line-height:1.12}.fineSignalBox .rfMain{font-size:1.02rem}.fineSignalBox .optMain{font-size:.90rem;margin-top:4px}.finePosition{margin:7px 0 2px;padding:9px 12px;border-radius:12px;background:#f5f8fb;border:2px solid #d4e0ea;text-align:center;color:#1f3448;font-weight:900}.finePosition span{color:#617487;font-weight:700;margin-right:8px}.infoGreen{background:#e3f8e9;color:#17613b;border:1px solid #8bd8a3}.infoOrange{background:#fff0d7;color:#7a4700;border:1px solid #efb95e}.infoRed{background:#ffe7e4;color:#8d221b;border:1px solid #f19a94}.infoBlue{background:#e8f3ff;color:#155b98;border:1px solid #aad0f2}.mini{font-size:.86rem;color:var(--muted)}.sectionHint{color:var(--muted);font-size:.92rem;margin:-4px 0 10px}.pageLead{font-size:.98rem;color:#4a6177;line-height:1.42}";
   css += ".timeline{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:12px 0}.tl{border-radius:13px;padding:9px 4px;text-align:center;font-size:.78rem;font-weight:900;background:#edf2f7;color:#53687b}.tl.on{background:#dff4e8;color:#17613b}.tl.hot{background:#ffe8c6;color:#8a4b00}.tl.bad{background:#ffe0de;color:#9a1c18}.diag{border-left:6px solid var(--blue);padding-left:12px}.diag.good{border-color:var(--green)}.diag.warn{border-color:var(--orange)}.diag.bad{border-color:var(--red)}";
   css += "details summary{cursor:pointer;font-weight:900;padding:8px 0;color:#23415d}details{background:#f7fafc;border-radius:13px;padding:4px 10px;margin-top:10px;border:1px solid #e4ecf4}";
   css += "@media(max-width:620px){body{padding:6px}.nav{grid-template-columns:repeat(5,1fr);gap:4px}.nav a{font-size:.68rem;padding:9px 1px;border-radius:11px}.grid2,.tiles,.statusGrid{grid-template-columns:1fr}.ctrl3{grid-template-columns:repeat(3,1fr)}.btn{font-size:.9rem;padding:13px 5px;min-height:50px}.card{padding:12px;border-radius:18px}.row{font-size:.92rem}h1{font-size:1.12rem}.logo{width:32px;height:32px}.tile{padding:14px;min-height:78px}.tileNo{width:40px;height:40px}.timeline{grid-template-columns:repeat(2,1fr)}}";
@@ -328,14 +340,13 @@ static void reserveHtml(String& html, size_t bytes) {
 static String rfCard() {
   rfUpdate();
   const String rfQuality = liveGetRfQualityText();
-  const float rfV = liveGetRfVoltage();
-  const float rfAdc = liveGetRfFilteredAdc();
-  const int rfPercent = rfPercentFromAdc(rfAdc);
+  const float rfPercentExact = rfGetSignalPercent();
+  const int rfPercent = rfPercentForWeb();
   const String rfColor = rfColorFromQuality(rfQuality);
 
   String html;
   html += "<div class='card'>";
-  html += "<div class='bigRf'>RF " + String(rfV, 3) + " V / " + String(rfAdc, 0) + " ADC - " + esc(rfQuality) + "</div>";
+  html += "<div class='bigRf'>RF " + String(rfPercentExact, 1) + " % - " + esc(rfQuality) + "</div>";
   html += "<div class='bar'><div class='fill' style='width:" + String(rfPercent) + "%;background:" + rfColor + "'></div></div>";
   html += "</div>";
   return html;
@@ -521,7 +532,7 @@ static String buildAutoPage() {
     // Die fruehere Funktion "Signal optimieren" ist aus der Web-UI entfernt.
     html += "<div class='chips'>" + chip("SAT-KANDIDAT", "blue") + chip("Signal " + rfQuality, rfQualityClass(rfQuality)) + "</div>";
     html += "<div class='pageLead'>Bitte am Receiver/TV pruefen, ob es der richtige Satellit ist. Die RF-Ampel ist nur eine Hilfe; die Entscheidung trifft der Nutzer.</div>";
-    html += row("RF-Bewertung", rfQuality + " / " + String(liveGetRfFilteredAdc(), 0) + " ADC");
+    html += row("RF-Signal", String(rfGetSignalPercent(), 1) + " % - " + rfQuality);
     html += "<div class='ctrl3' style='margin-top:12px'>";
     html += actionButton("/candidate/ok", "+ OK", true, "green");
     html += actionButton("/candidate/false", "- FALSCH", true, "orange");
@@ -634,6 +645,11 @@ static String buildAutoPage() {
 // V3: Nicht aktive Fahrtrichtungen sind hellorange, STOP ist hellrot.
 // So bleibt auch im Stand klar: Das sind echte Bedienbuttons und keine Infofelder.
 static String buildManualPage() {
+  // V3.1.5: Beim Oeffnen der manuellen Seite beginnt eine neue Feinjustier-
+  // Referenz. AZ startet relativ bei 0 Schritten; EL merkt sich den aktuell
+  // gemessenen MPU-Winkel als Null-/Referenzstellung.
+  liveCommandResetFineTracking();
+
   const bool azActive = liveWebManualAzActive();
   const bool elActive = liveWebManualElActive();
   const String azDir = liveWebManualAzDirectionText();
@@ -654,9 +670,14 @@ static String buildManualPage() {
   html += manualControlButton("btnAzStop", "/az/stop", "/api/az/stop", "STOP", azActive ? "activeStop" : "redLight");
   html += manualControlButton("btnAzPlus", "/az/plus", "/api/az/plus", "Azimut +", (azActive && azDir == "AZ+") ? "activeMove" : "orangeLight");
   html += "</div>";
-  html += row("Azimut Web-Zustand", azActive ? "LAEUFT" : "STOP");
-  html += "<div class='row'><span>Azimut Live</span><b id='azLive'>" + String(azActive ? "LAEUFT" : "STOP") + "</b></div>";
-  html += "<div id='hallManualRow' class='row " + hallSensorRowClass() + "'><span>Hall-Sensoren</span><b id='hallManual'>" + hallSensorSummary() + "</b></div>";
+  const float manualRfPercent = rfGetSignalPercent();
+  const float manualOptPercent = fineOptPercent(manualRfPercent);
+  html += "<div class='ctrl3' style='margin-top:8px'>";
+  html += fineStepButton("btnAzFineMinus", "/az/fine/minus", "/api/az/fine/minus", "Fein -");
+  html += "<div id='azFineSignal' class='fineSignalBox'><div class='rfMain'>RF " + String(manualRfPercent, 1) + " %</div><div class='optMain'>OPT " + String(manualOptPercent, 1) + " %</div></div>";
+  html += fineStepButton("btnAzFinePlus", "/az/fine/plus", "/api/az/fine/plus", "Fein +");
+  html += "</div>";
+  html += "<div class='finePosition'><span>AZ Position</span><b id='azFinePos'>0 -> " + String(liveGetFineAzCorrectionSteps()) + " Schritte</b></div>";
   html += "</div>";
 
   html += "<div class='card'><div class='title'><h2>Manuell Winkel</h2></div>";
@@ -674,20 +695,36 @@ static String buildManualPage() {
   html += manualControlButton("btnElStop", "/el/stop", "/api/el/stop", "STOP", elActive ? "activeStop" : "redLight");
   html += manualControlButton("btnElPlus", "/el/plus", "/api/el/plus", "Winkel +  " + currentAngleButtonText, (elActive && elDir == "EZ+") ? "activeMove" : "orangeLight");
   html += "</div>";
-  html += row("Winkel Web-Zustand", elActive ? "LAEUFT" : "STOP");
-  html += "<div class='row'><span>Winkel Live</span><b id='elLive'>" + String(elActive ? "LAEUFT" : "STOP") + "</b></div>";
-  html += "<div class='row'><span>Winkel</span><b id='ezLive'>" + String(liveGetRelativeAngleDeg(), 2) + " deg</b></div>";
-  html += row("Softlimits", String(ELEVATION_MIN_SOFT, 1) + " bis " + String(ELEVATION_MAX_SOFT, 1) + " deg");
+  html += "<div class='ctrl3' style='margin-top:8px'>";
+  html += fineStepButton("btnElFineMinus", "/el/fine/minus", "/api/el/fine/minus", "Fein -");
+  html += "<div id='elFineSignal' class='fineSignalBox'><div class='rfMain'>RF " + String(manualRfPercent, 1) + " %</div><div class='optMain'>OPT " + String(manualOptPercent, 1) + " %</div></div>";
+  html += fineStepButton("btnElFinePlus", "/el/fine/plus", "/api/el/fine/plus", "Fein +");
+  html += "</div>";
+  const float elFineCurrentDeg = liveGetRelativeAngleDeg();
+  const float elFineReferenceDeg = elFineCurrentDeg - liveGetFineElDeltaDeg();
+  html += "<div class='finePosition'><span>EL Position</span><b id='elFinePos'>" + String(elFineReferenceDeg, 2) + " -> " + String(elFineCurrentDeg, 2) + " deg (" + String(liveGetFineElDeltaDeg() >= 0.0f ? "+" : "") + String(liveGetFineElDeltaDeg(), 2) + " deg)</b></div>";
+  html += "</div>";
+
+  // RF und OPT stehen direkt an den Feinbuttons. Eine zusaetzliche
+  // Signallegende auf dieser Bedienseite ist nicht erforderlich.
+
+  // Technische Statusinformationen bewusst kompakt: doppelte Web-/Live-Zustaende
+  // entfallen. Uebrig bleiben nur Motorzustand, Hall-Sensoren sowie EL-Winkel/Limits.
+  html += "<div class='card'><div class='title'><h2>Technischer Status</h2></div>";
+  html += "<div class='row'><span>Motoren</span><b>AZ: <span id='azLive'>" + String(azActive ? azDir : "STOP") + "</span> | EL: <span id='elLive'>" + String(elActive ? elDir : "STOP") + "</span></b></div>";
+  html += "<div id='hallManualRow' class='row " + hallSensorRowClass() + "'><span>Hall</span><b id='hallManual'>" + hallSensorSummary() + "</b></div>";
+  html += "<div class='row'><span>Elevation</span><b><span id='ezLive'>" + String(liveGetRelativeAngleDeg(), 2) + " deg</span> | Limits " + String(ELEVATION_MIN_SOFT, 1) + "-" + String(ELEVATION_MAX_SOFT, 1) + " deg</b></div>";
   html += "</div>";
 
   html += "<script>";
   html += "function setCls(id,cls){var e=document.getElementById(id);if(e)e.className='btn '+cls;}";
-  html += "function setText(id,txt){var e=document.getElementById(id);if(e)e.textContent=txt;}";
+  html += "function setText(id,txt){var e=document.getElementById(id);if(e)e.textContent=txt;}function setFineSignal(id,rf,opt){var e=document.getElementById(id);if(!e)return;e.innerHTML='<div class=\'rfMain\'>RF '+Number(rf).toFixed(1)+' %</div><div class=\'optMain\'>OPT '+Number(opt).toFixed(1)+' %</div>';}";
   html += "function setNote(id,active,dir,axis){var e=document.getElementById(id);if(!e)return;var isH=axis=='Winkel';e.className='note '+(active?'warnbox':'');e.innerHTML=active?('<b>'+axis+' laeuft</b><br>Motor bleibt aktiv, bis STOP gedrueckt wird.'):(isH?'Winkel steht. Winkel + oder Winkel - startet die Bewegung.':axis+' steht. '+axis+'+ oder '+axis+'- startet die Bewegung.');}";
-  html += "function applyManualState(d){setCls('btnAzMinus',(d.azActive&&d.azDir=='AZ-')?'activeMove':'orangeLight');setCls('btnAzPlus',(d.azActive&&d.azDir=='AZ+')?'activeMove':'orangeLight');setCls('btnAzStop',d.azActive?'activeStop':'redLight');setCls('btnElMinus',(d.elActive&&d.elDir=='EZ-')?'activeMove':'orangeLight');setCls('btnElPlus',(d.elActive&&d.elDir=='EZ+')?'activeMove':'orangeLight');setCls('btnElStop',d.elActive?'activeStop':'redLight');setText('azLive',d.azActive?'LAEUFT':'STOP');setText('elLive',d.elActive?'LAEUFT':'STOP');var w=Number(d.ez).toFixed(2)+' deg';setText('ezLive',w);setText('btnElMinus','Winkel -  '+Number(d.ez).toFixed(1)+' deg');setText('btnElPlus','Winkel +  '+Number(d.ez).toFixed(1)+' deg');if(d.hallText)setText('hallManual',d.hallText);var hm=document.getElementById('hallManualRow');if(hm&&d.hallClass)hm.className='row '+d.hallClass;setNote('azNote',d.azActive,d.azDir,'Azimut');setNote('elNote',d.elActive,d.elDir,'Winkel');}";
+  html += "function applyManualState(d){setCls('btnAzMinus',(d.azActive&&d.azDir=='AZ-')?'activeMove':'orangeLight');setCls('btnAzPlus',(d.azActive&&d.azDir=='AZ+')?'activeMove':'orangeLight');setCls('btnAzStop',d.azActive?'activeStop':'redLight');setCls('btnElMinus',(d.elActive&&d.elDir=='EZ-')?'activeMove':'orangeLight');setCls('btnElPlus',(d.elActive&&d.elDir=='EZ+')?'activeMove':'orangeLight');setCls('btnElStop',d.elActive?'activeStop':'redLight');setText('azLive',d.azActive?d.azDir:'STOP');setText('elLive',d.elActive?d.elDir:'STOP');var w=Number(d.ez).toFixed(2)+' deg';setText('ezLive',w);setText('btnElMinus','Winkel -  '+Number(d.ez).toFixed(1)+' deg');setText('btnElPlus','Winkel +  '+Number(d.ez).toFixed(1)+' deg');if(d.rfPercent!==undefined){var opt=(d.optPercent!==undefined)?Number(d.optPercent).toFixed(1):'0.0';setFineSignal('azFineSignal',d.rfPercent,opt);setFineSignal('elFineSignal',d.rfPercent,opt);}if(d.azFineSteps!==undefined)setText('azFinePos','0 -> '+(d.azFineSteps>0?'+':'')+d.azFineSteps+' Schritte');if(d.elFineDelta!==undefined){var cur=Number(d.ez);var delta=Number(d.elFineDelta);var ref=cur-delta;setText('elFinePos',ref.toFixed(2)+' -> '+cur.toFixed(2)+' deg ('+(delta>=0?'+':'')+delta.toFixed(2)+' deg)');}if(d.hallText)setText('hallManual',d.hallText);var hm=document.getElementById('hallManualRow');if(hm&&d.hallClass)hm.className='row '+d.hallClass;setNote('azNote',d.azActive,d.azDir,'Azimut');setNote('elNote',d.elActive,d.elDir,'Winkel');}";
   html += "function optimistic(url){var d={azActive:false,azDir:'STOP',elActive:false,elDir:'STOP',ez:parseFloat((document.getElementById('ezLive')||{}).textContent)||0};if(url.indexOf('/api/az/plus')>=0){d.azActive=true;d.azDir='AZ+';}else if(url.indexOf('/api/az/minus')>=0){d.azActive=true;d.azDir='AZ-';}else if(url.indexOf('/api/el/plus')>=0){d.elActive=true;d.elDir='EZ+';}else if(url.indexOf('/api/el/minus')>=0){d.elActive=true;d.elDir='EZ-';}applyManualState(d);}";
   html += "function updateManualState(){fetch('/api/manual/status',{cache:'no-store'}).then(r=>r.json()).then(applyManualState).catch(()=>{});}";
   html += "function sendManualCmd(url){optimistic(url);fetch(url,{cache:'no-store'}).then(r=>r.json()).then(applyManualState).catch(updateManualState);return false;}";
+  html += "function sendFineCmd(url,id){var b=document.getElementById(id);if(b){b.style.transform='scale(.94)';setTimeout(function(){b.style.transform='';},180);}fetch(url,{cache:'no-store'}).then(r=>r.json()).then(applyManualState).catch(updateManualState);setTimeout(updateManualState,180);setTimeout(updateManualState,450);return false;}";
   html += "document.addEventListener('DOMContentLoaded',function(){updateManualState();setInterval(updateManualState,250);});";
   html += "</script>";
   html += htmlFooter();
@@ -915,6 +952,23 @@ static void sendManualStatusJson() {
   json += "\"elActive\":" + jsonBool(liveWebManualElActive()) + ",";
   json += "\"elDir\":\"" + String(liveWebManualElDirectionText()) + "\",";
   json += "\"ez\":" + String(liveGetRelativeAngleDeg(), 2) + ",";
+  const float manualRfAdc = liveGetRfFilteredAdc();
+  const float manualRfPercent = rfGetSignalPercent();
+  const float manualOptPercent = fineOptPercent(manualRfPercent);
+  json += "\"rfPercent\":" + String(manualRfPercent, 1) + ",";
+  json += "\"optPercent\":" + String(manualOptPercent, 1) + ",";
+  json += "\"rfQuality\":\"" + jsonEsc(liveGetRfQualityText()) + "\",";
+  json += "\"rfDetail\":\"" + String(liveGetRfVoltage(), 3) + " V / " + String(manualRfAdc, 0) + " ADC\",";
+  json += "\"azFineSteps\":" + String(liveGetFineAzCorrectionSteps()) + ",";
+  json += "\"elFineSteps\":" + String(liveGetFineElCorrectionSteps()) + ",";
+  json += "\"elFineDelta\":" + String(liveGetFineElDeltaDeg(), 2) + ",";
+  json += "\"fineLastAxis\":\"" + String(liveGetFineLastAxisText()) + "\",";
+  json += "\"fineLastDir\":" + String(liveGetFineLastDirection()) + ",";
+  json += "\"finePending\":" + jsonBool(liveGetFineRfSamplePending()) + ",";
+  json += "\"fineRfValid\":" + jsonBool(liveGetFineRfResultValid()) + ",";
+  json += "\"fineRfBefore\":" + String(liveGetFineLastRfBefore(), 1) + ",";
+  json += "\"fineRfAfter\":" + String(liveGetFineLastRfAfter(), 1) + ",";
+  json += "\"fineRfDelta\":" + String(liveGetFineLastRfDelta(), 1) + ",";
   json += "\"hallC\":" + jsonBool(liveHallCenter()) + ",";
   json += "\"hallE\":" + jsonBool(liveHallEast()) + ",";
   json += "\"hallW\":" + jsonBool(liveHallWest()) + ",";
@@ -1103,12 +1157,16 @@ static void handleAzMinus() { liveCommandAzButtonMinus(); redirectTo("/manuell")
 static void handleAzEast() { liveCommandAzEast(); redirectTo("/manuell"); }
 static void handleAzWest() { liveCommandAzWest(); redirectTo("/manuell"); }
 static void handleAzStop() { liveCommandAzStop(); redirectTo("/manuell"); }
+static void handleAzFinePlus() { liveCommandAzFinePlus(); redirectTo("/manuell"); }
+static void handleAzFineMinus() { liveCommandAzFineMinus(); redirectTo("/manuell"); }
 
 static void handleElPlus() { liveCommandElButtonPlus(); redirectTo("/manuell"); }
 static void handleElMinus() { liveCommandElButtonMinus(); redirectTo("/manuell"); }
 static void handleElUp() { liveCommandElUp(); redirectTo("/manuell"); }
 static void handleElDown() { liveCommandElDown(); redirectTo("/manuell"); }
 static void handleElStop() { liveCommandElStop(); redirectTo("/manuell"); }
+static void handleElFinePlus() { liveCommandElFinePlus(); redirectTo("/manuell"); }
+static void handleElFineMinus() { liveCommandElFineMinus(); redirectTo("/manuell"); }
 
 static void handleApiCenterStatus() { sendCenterStatusJson(); }
 static void handleApiAutoStatus() { sendAutoStatusJson(); }
@@ -1117,9 +1175,15 @@ static void handleApiHallStatus() { sendHallStatusJson(); }
 static void handleApiAzPlus() { liveCommandAzButtonPlus(); sendManualStatusJson(); }
 static void handleApiAzMinus() { liveCommandAzButtonMinus(); sendManualStatusJson(); }
 static void handleApiAzStop() { liveCommandAzStop(); sendManualStatusJson(); }
+static void handleApiAzFinePlus() { liveCommandAzFinePlus(); sendManualStatusJson(); }
+static void handleApiAzFineMinus() { liveCommandAzFineMinus(); sendManualStatusJson(); }
 static void handleApiElPlus() { liveCommandElButtonPlus(); sendManualStatusJson(); }
 static void handleApiElMinus() { liveCommandElButtonMinus(); sendManualStatusJson(); }
 static void handleApiElStop() { liveCommandElStop(); sendManualStatusJson(); }
+static void handleApiElFinePlus() { liveCommandElFinePlus(); sendManualStatusJson(); }
+static void handleApiElFineMinus() { liveCommandElFineMinus(); sendManualStatusJson(); }
+static void handleApiFineReset() { liveCommandResetFineTracking(); sendManualStatusJson(); }
+static void handleFineReset() { liveCommandResetFineTracking(); redirectTo("/manuell"); }
 
 static void handleSystemResetExecute() {
   Serial.println("WEB V3: ESP Reset angefordert. Motoren stoppen, Rueckkehrseite senden und Controller neu starten.");
@@ -1213,12 +1277,17 @@ void webServerInit() {
   server.on("/az/east", handleAzEast);
   server.on("/az/west", handleAzWest);
   server.on("/az/stop", handleAzStop);
+  server.on("/az/fine/plus", handleAzFinePlus);
+  server.on("/az/fine/minus", handleAzFineMinus);
 
   server.on("/el/plus", handleElPlus);
   server.on("/el/minus", handleElMinus);
   server.on("/el/up", handleElUp);
   server.on("/el/down", handleElDown);
   server.on("/el/stop", handleElStop);
+  server.on("/el/fine/plus", handleElFinePlus);
+  server.on("/el/fine/minus", handleElFineMinus);
+  server.on("/fine/reset", handleFineReset);
 
   server.on("/api/center/status", handleApiCenterStatus);
   server.on("/api/auto/status", handleApiAutoStatus);
@@ -1227,9 +1296,14 @@ void webServerInit() {
   server.on("/api/az/plus", handleApiAzPlus);
   server.on("/api/az/minus", handleApiAzMinus);
   server.on("/api/az/stop", handleApiAzStop);
+  server.on("/api/az/fine/plus", handleApiAzFinePlus);
+  server.on("/api/az/fine/minus", handleApiAzFineMinus);
   server.on("/api/el/plus", handleApiElPlus);
   server.on("/api/el/minus", handleApiElMinus);
   server.on("/api/el/stop", handleApiElStop);
+  server.on("/api/el/fine/plus", handleApiElFinePlus);
+  server.on("/api/el/fine/minus", handleApiElFineMinus);
+  server.on("/api/fine/reset", handleApiFineReset);
 
   server.on("/candidate/ok", handleCandidateOk);
   server.on("/candidate/false", handleCandidateFalse);

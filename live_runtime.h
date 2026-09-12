@@ -254,6 +254,29 @@ void liveCommandAzButtonMinus();
 void liveCommandElButtonPlus();
 void liveCommandElButtonMinus();
 
+// Sehr kleine Web-Feinschritte fuer die abschliessende RF-Optimierung.
+// AZ: kurzer Einzelpuls mit Endsensor-Schutz.
+// EL: kurzer Einzelpuls mit Softlimit-Pruefung und niedriger PWM.
+void liveCommandAzFinePlus();
+void liveCommandAzFineMinus();
+void liveCommandElFinePlus();
+void liveCommandElFineMinus();
+
+// Relative Positions-/Signalverfolgung fuer die Web-Feinjustierung.
+// AZ wird als Schrittzahl, EL zusaetzlich als echte Winkeldifferenz erfasst.
+// Diese Werte sind reine Bedien-/Diagnosehilfe und beeinflussen AUTO nicht.
+void liveCommandResetFineTracking();
+int liveGetFineAzCorrectionSteps();
+int liveGetFineElCorrectionSteps();
+float liveGetFineElDeltaDeg();
+const char* liveGetFineLastAxisText();
+int liveGetFineLastDirection();
+bool liveGetFineRfResultValid();
+bool liveGetFineRfSamplePending();
+float liveGetFineLastRfBefore();
+float liveGetFineLastRfAfter();
+float liveGetFineLastRfDelta();
+
 // Web-UI Spiegelung der manuellen Start-/Stop-Befehle.
 // Diese Funktionen werden nur fuer die Anzeige der Web-Buttons genutzt.
 bool liveWebManualAzActive();

@@ -465,6 +465,36 @@ namespace {
   // <0 = westlich der Referenz
   int azPositionSteps = 0;
 
+  // ---------------------------------------------------
+  // Web-Feinjustierung: relative Korrektur-/Signalhistorie
+  // ---------------------------------------------------
+  // Diese Werte gehoeren ausschliesslich zur manuellen Feinjustierung in der
+  // Web-UI. Sie veraendern weder AUTO-Suche noch die interne AZPOS-Logik.
+  //
+  // AZ besitzt keinen absoluten Winkelsensor. Deshalb wird dort nur die Zahl
+  // der seit dem letzten Reset ausgefuehrten Feinschritte angezeigt.
+  // EL kann ueber den MPU6050 als echte Winkeldifferenz zur Referenz angezeigt
+  // werden.
+  int webFineAzCorrectionSteps = 0;
+  int webFineElCorrectionSteps = 0;
+  bool webFineElReferenceValid = false;
+  float webFineElReferenceDeg = 0.0f;
+
+  enum WebFineAxis {
+    WEB_FINE_AXIS_NONE = 0,
+    WEB_FINE_AXIS_AZ,
+    WEB_FINE_AXIS_EL
+  };
+
+  WebFineAxis webFineLastAxis = WEB_FINE_AXIS_NONE;
+  int webFineLastDirection = 0;   // -1 = Fein -, +1 = Fein +
+  float webFineLastRfBefore = 0.0f;
+  float webFineLastRfAfter = 0.0f;
+  float webFineLastRfDelta = 0.0f;
+  bool webFineRfResultValid = false;
+  bool webFineRfSamplePending = false;
+  unsigned long webFineRfSampleDueMs = 0;
+
   // Optionaler Verweis auf die grobe Suchrichtung für Resume / Folgesuche.
   AzimuthDirection autoCurrentSearchDirection = AZ_DIR_EAST;
 
@@ -663,6 +693,39 @@ static void applyAzStepFromDir(AzimuthDirection dir) {
     azPositionSteps++;
   } else if (dir == AZ_DIR_WEST) {
     azPositionSteps--;
+  }
+}
+
+// Vorwaertsdeklaration: Die Web-Feintracking-Helfer benoetigen den relativen
+// Elevationswinkel, die eigentliche Funktion ist weiter unten definiert.
+static float currentRelativeAngle();
+
+// Startet die Messung fuer einen manuellen Feinschritt. Der RF-Wert direkt
+// vor dem Puls wird gespeichert; nach Puls + kurzer Einschwingzeit wird der
+// neue RF-Wert zyklisch in runLiveRuntime() uebernommen.
+static void beginWebFineRfSample(WebFineAxis axis, int direction, unsigned long pulseMs) {
+  webFineLastAxis = axis;
+  webFineLastDirection = direction;
+  webFineLastRfBefore = rfGetSignalPercent();
+  webFineRfResultValid = false;
+  webFineRfSamplePending = true;
+  webFineRfSampleDueMs = millis() + pulseMs + 400UL;
+}
+
+static void serviceWebFineRfSample() {
+  if (!webFineRfSamplePending) return;
+  if ((long)(millis() - webFineRfSampleDueMs) < 0) return;
+
+  webFineLastRfAfter = rfGetSignalPercent();
+  webFineLastRfDelta = webFineLastRfAfter - webFineLastRfBefore;
+  webFineRfResultValid = true;
+  webFineRfSamplePending = false;
+}
+
+static void ensureWebFineElReference() {
+  if (!webFineElReferenceValid && mpuOk) {
+    webFineElReferenceDeg = currentRelativeAngle();
+    webFineElReferenceValid = true;
   }
 }
 
@@ -1289,7 +1352,7 @@ static void startAutoSequence() {
   Serial.println();
   Serial.println("# ============================================================================");
   Serial.println("# AUTO_LOG_BEGIN");
-  Serial.println("# V3.1.4 | Suchlogik unveraendert | bereinigtes AUTO-Protokoll");
+  Serial.println("# V3.1.5 | Suchlogik unveraendert | Web-Feinjustierung erweitert");
   Serial.println("# T_MS;STATE;DIR;RAW;FILTER;SIGNAL;DROP;ZERO_ADC;BEST_ADC;AZPOS;EZ;H_C;H_E;H_W;MIN_RF;CENTER_MIN;BLOCKED");
   Serial.println("# ----------------------------------------------------------------------------");
 
@@ -2677,17 +2740,15 @@ float liveGetRfFilteredAdc() {
 }
 
 const char* liveGetRfQualityText() {
-  // V3: RF-Bewertung anhand der praktischen Aussentest-Grenzen.
-  // Diese Ampel dient nur der Anzeige/Diagnose. Sie blockiert bewusst keine
-  // Benutzerentscheidung: Wenn der Nutzer im Kandidatenmodus PLUS drueckt,
-  // wird der Satellit bestaetigt. Die RF-Ampel bewertet nur die Signalstaerke.
-  //
-  // Wichtig fuer AD8317/AD8318 im aktuellen Aufbau:
-  // kleinerer ADC-Wert = staerkeres Signal.
-  const float adc = rfGetFilteredAdc();
-  if (adc <= RF_TV_STRONG_MAX_ADC) return "sehr gut";
-  if (adc <= RF_TV_GOOD_MAX_ADC)   return "gut";
-  if (adc <= RF_TV_USABLE_MAX_ADC) return "brauchbar";
+  // V3.1.5: Nutzerbewertung aus dem normierten RF-Prozentwert.
+  // Dadurch ist die Ampel konsistent mit der definierten 80-%-Grenze:
+  // unter 80 % = schwach, 80-<85 % = brauchbar, 85-<95 % = gut,
+  // ab 95 % = sehr gut. Diese Einstufung ist reine Anzeige/Diagnose und
+  // veraendert keine AUTO-Entscheidung oder Motorlogik.
+  const float percent = rfGetSignalPercent();
+  if (percent >= RF_QUALITY_STRONG_MIN_PERCENT) return "sehr gut";
+  if (percent >= RF_QUALITY_GOOD_MIN_PERCENT)   return "gut";
+  if (percent >= RF_QUALITY_USABLE_MIN_PERCENT) return "brauchbar";
   return "schwach";
 }
 
@@ -3091,6 +3152,117 @@ void liveCommandElButtonMinus() {
   elevationDown();
   manualElDirection = EL_DIR_DOWN;
 }
+
+// =====================================================
+// Web-UI Feinschritte fuer die abschliessende Signaloptimierung
+// =====================================================
+// Die normalen Web-Buttons starten eine Dauerfahrt bis STOP. Fuer das exakte
+// Nachstellen am Signalmaximum sind zusaetzlich sehr kurze Einzelpulse noetig.
+//
+// WICHTIG:
+// - PLUS/MINUS behalten exakt dieselbe getestete Bewegungszuordnung wie die
+//   normalen manuellen Web-Buttons.
+// - AZ-Feinschritte laufen ueber azimuthPulseEast/West() und beachten damit
+//   die logischen Endsensoren.
+// - EL-Feinschritte beachten die normalen Softwarelimits.
+// - Die Pulse enden automatisch ueber azimuthUpdate()/elevationUpdate().
+// - Kein Feinschritt bleibt als Web-Dauerfahrt aktiv.
+
+void liveCommandAzFinePlus() {
+  // Normales AZ PLUS entspricht im getesteten Aufbau logisch WEST.
+  abortAutoSequence();
+  enterManualMode();
+  stopManualActuators();
+  setManualAxis(MANUAL_AXIS_AZ);
+  webManualAzHoldActive = false;
+  manualAzIntent = AZ_DIR_NONE;
+  beginWebFineRfSample(WEB_FINE_AXIS_AZ, +1, WEB_AZ_FINE_PULSE_MS);
+  webFineAzCorrectionSteps++;
+  azimuthPulseWest(WEB_AZ_FINE_PULSE_MS);
+}
+
+void liveCommandAzFineMinus() {
+  // Normales AZ MINUS entspricht im getesteten Aufbau logisch EAST.
+  abortAutoSequence();
+  enterManualMode();
+  stopManualActuators();
+  setManualAxis(MANUAL_AXIS_AZ);
+  webManualAzHoldActive = false;
+  manualAzIntent = AZ_DIR_NONE;
+  beginWebFineRfSample(WEB_FINE_AXIS_AZ, -1, WEB_AZ_FINE_PULSE_MS);
+  webFineAzCorrectionSteps--;
+  azimuthPulseEast(WEB_AZ_FINE_PULSE_MS);
+}
+
+void liveCommandElFinePlus() {
+  abortAutoSequence();
+  enterManualMode();
+  stopManualActuators();
+  setManualAxis(MANUAL_AXIS_EL);
+  webManualElHoldActive = false;
+  manualElDirection = EL_DIR_STOP;
+
+  if (!mpuOk || !canMoveElevationUp()) {
+    Serial.println("WEB FEIN EZ+: blockiert (MPU/Softlimit)");
+    return;
+  }
+
+  ensureWebFineElReference();
+  beginWebFineRfSample(WEB_FINE_AXIS_EL, +1, WEB_EL_FINE_PULSE_MS);
+  webFineElCorrectionSteps++;
+  elevationPulseUp(WEB_EL_FINE_PULSE_MS, WEB_EL_FINE_PWM);
+}
+
+void liveCommandElFineMinus() {
+  abortAutoSequence();
+  enterManualMode();
+  stopManualActuators();
+  setManualAxis(MANUAL_AXIS_EL);
+  webManualElHoldActive = false;
+  manualElDirection = EL_DIR_STOP;
+
+  if (!mpuOk || !canMoveElevationDown()) {
+    Serial.println("WEB FEIN EZ-: blockiert (MPU/Softlimit)");
+    return;
+  }
+
+  ensureWebFineElReference();
+  beginWebFineRfSample(WEB_FINE_AXIS_EL, -1, WEB_EL_FINE_PULSE_MS);
+  webFineElCorrectionSteps--;
+  elevationPulseDown(WEB_EL_FINE_PULSE_MS, WEB_EL_FINE_PWM);
+}
+
+void liveCommandResetFineTracking() {
+  webFineAzCorrectionSteps = 0;
+  webFineElCorrectionSteps = 0;
+  webFineElReferenceValid = mpuOk;
+  webFineElReferenceDeg = mpuOk ? currentRelativeAngle() : 0.0f;
+  webFineLastAxis = WEB_FINE_AXIS_NONE;
+  webFineLastDirection = 0;
+  webFineLastRfBefore = rfGetSignalPercent();
+  webFineLastRfAfter = webFineLastRfBefore;
+  webFineLastRfDelta = 0.0f;
+  webFineRfResultValid = false;
+  webFineRfSamplePending = false;
+}
+
+int liveGetFineAzCorrectionSteps() { return webFineAzCorrectionSteps; }
+int liveGetFineElCorrectionSteps() { return webFineElCorrectionSteps; }
+float liveGetFineElDeltaDeg() {
+  if (!webFineElReferenceValid || !mpuOk) return 0.0f;
+  return currentRelativeAngle() - webFineElReferenceDeg;
+}
+const char* liveGetFineLastAxisText() {
+  if (webFineLastAxis == WEB_FINE_AXIS_AZ) return "AZ";
+  if (webFineLastAxis == WEB_FINE_AXIS_EL) return "EL";
+  return "-";
+}
+int liveGetFineLastDirection() { return webFineLastDirection; }
+bool liveGetFineRfResultValid() { return webFineRfResultValid; }
+bool liveGetFineRfSamplePending() { return webFineRfSamplePending; }
+float liveGetFineLastRfBefore() { return webFineLastRfBefore; }
+float liveGetFineLastRfAfter() { return webFineLastRfAfter; }
+float liveGetFineLastRfDelta() { return webFineLastRfDelta; }
 
 // =====================================================
 // Web-UI Status fuer manuelle Start-/Stop-Bedienung
@@ -4402,6 +4574,8 @@ void runLiveRuntime() {
   if (mpuOk) {
     mpuUpdateFilteredAngle();
   }
+
+  serviceWebFineRfSample();
 
   processButtonLogic();
   serviceCenterElevationAdjustSafety();

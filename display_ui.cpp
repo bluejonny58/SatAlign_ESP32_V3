@@ -427,12 +427,9 @@ void displayShowMpuFatalBootError() {
 // WLAN/OTA-Start gezeigt, damit bei einer WLAN-Wartezeit keine alten
 // Grafikreste sichtbar bleiben.
 
-// Zeigt die automatische Boot-Anfahrt auf die Standard-Elevation.
-// Kommentarstand: V3
-//
-// Diese Anzeige ist bewusst ein eigener Vollbildschirm und kein normaler
 // V3: Die frueheren Boot-EZ-Startanzeigen wurden entfernt.
-// Info-/Sued-Hinweis und Hauptmenue sind die einzigen Boot-Anzeigen.
+// Beim Booten gibt es nur den Info-/Sued-Hinweis; die eigentliche
+// Elevationskorrektur erfolgt spaeter in den normalen Menues.
 
 void displayShowSouthAlignPrompt() {
   tft.fillScreen(C_BG);

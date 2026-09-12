@@ -50,6 +50,9 @@ void printSettingsToSerial();
 extern float RF_TV_USABLE_MAX_ADC;
 extern float RF_TV_GOOD_MAX_ADC;
 extern float RF_TV_STRONG_MAX_ADC;
+extern float RF_QUALITY_USABLE_MIN_PERCENT;
+extern float RF_QUALITY_GOOD_MIN_PERCENT;
+extern float RF_QUALITY_STRONG_MIN_PERCENT;
 
 // V3_01: Mindest-Prozentwert fuer die Kandidatenerkennung waehrend
 // der ersten AUTO-Centerfahrt. Diese Schwelle ist bewusst strenger

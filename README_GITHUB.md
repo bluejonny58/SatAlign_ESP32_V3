@@ -2,9 +2,9 @@
 
 ## Release-Stand
 
-**Aktuell empfohlene Version: V3.1.4**
+**Aktueller Projektstand: V3.1.5**
 
-Dieses Repository entspricht dem praktisch getesteten stabilen Stand ohne experimentelle Peak-Rueckfahrt. Die Firmwareversion wird in `config.h` ueber `FIRMWARE_VERSION = "3.1.4"` gefuehrt.
+Die bewaehrte AUTO-Basis entspricht dem praktisch getesteten Stand ohne experimentelle Peak-Rueckfahrt. V3.1.5 erweitert darauf aufbauend die manuelle Web-Feinjustierung. Die Firmwareversion wird in `config.h` ueber `FIRMWARE_VERSION = "3.1.5"` gefuehrt.
 
 ## Wichtig fuer Arduino
 
@@ -19,17 +19,21 @@ Die Release-Version wird nicht ueber den Dateinamen, sondern ueber `FIRMWARE_VER
 
 ## Was sich gegenueber dem alten GitHub-Stand geaendert hat
 
-- Stable Baseline von v3.0.0 auf **V3.1.4** aktualisiert.
+- Aktueller Projektstand auf **V3.1.5** aktualisiert; die bewaehrte AUTO-Basis von V3.1.4 bleibt unveraendert.
 - feste GeniusBulli-IP `192.168.4.15` dokumentiert.
 - mDNS aus dem Projekt entfernt; IP-basierter Aufruf ist der vorgesehene Weg.
 - ElegantOTA (`/update`) und ArduinoOTA parallel dokumentiert.
 - fruehere automatische Funktion `Signal optimieren` aus Bedienung/Dokumentation entfernt.
-- RF-Auswertung fuer Anzeige und AUTO-Suche vereinheitlicht.
+- RF-Auswertung fuer Anzeige und AUTO-Suche vereinheitlicht; V3.1.5 bewertet die Nutzerqualitaet prozentbasiert: <80 % schwach, 80-<85 % brauchbar, 85-<95 % gut, >=95 % sehr gut.
 - RF-Anzeige auf max. 100 % begrenzt.
 - AUTO-Kandidatenschwelle auf 80 % gesetzt.
 - `RF_FILTER_ALPHA` auf 0.50 eingestellt.
 - strukturiertes, bereinigtes AUTO-Serial-Logging dokumentiert.
 - `AZPOS` als Diagnosewert, nicht als Encoderposition, klargestellt.
+- Elevationskorrektur in `Mitte einstellen` dokumentiert: PLUS/MINUS erzeugen kurze 250-ms-Pulse; kein 10-Sekunden-Bootfenster.
+- Manuelle Web-UI um separate AZ-/EL-Feinschritte erweitert: AZ 50 ms, EL 50 ms bei PWM 90; Pulszeiten zentral in `settings.cpp` parametrierbar, normale Fahrbuttons bleiben Dauerfahrt bis STOP.
+- In V3.1.5 stehen `RF` und gespreiztes `OPT` direkt **zwischen** den beiden Feinbuttons; die relative Positionsanzeige folgt unmittelbar darunter. RF 80-100 % wird fuer `OPT` auf 0-100 % gespreizt. Die separate Signalbewertungs-/Diagnosekarte wurde von der manuellen Bedienseite entfernt.
+- Relative Feinpositionsanzeige: Beim Oeffnen von `Manuell` wird die Referenz automatisch gesetzt. AZ zeigt `0 -> +/-n Schritte`; EL zeigt `Referenzwinkel -> aktueller Winkel (Aenderung)`. Ein separater Reset-Button ist nicht mehr erforderlich. Der technische Status ist auf Motorzustand AZ/EL, Hall-Sensoren sowie EL-Winkel mit Softlimits reduziert; doppelte Web-/Live-Zeilen entfallen.
 
 ## GitHub-sichere Dateien
 
@@ -72,3 +76,5 @@ kopieren. Dieser Block enthaelt die relevanten RF-, Richtungs-, Hall-, Elevation
 ## Bewusst nicht enthalten
 
 Die experimentellen Peak-Such-/Peak-Rueckfahrvarianten wurden nach Feldtests verworfen und gehoeren **nicht** zum stabilen Release. Sie sollten deshalb weder in `main` noch in der aktuellen Dokumentation als Funktion aufgefuehrt werden.
+
+- Die Seite `Suchen` zeigt fuer Nutzer primaer den echten RF-Prozentwert und die Qualitaetsstufe statt Spannung/ADC; Rohwerte bleiben auf Diagnose-/Feinjustierseiten verfuegbar.

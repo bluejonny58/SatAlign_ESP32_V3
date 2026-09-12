@@ -14,7 +14,7 @@
 #pragma once
 
 // Zentrale Firmware-Version fuer Diagnose, Web-UI und OTA.
-static const char* FIRMWARE_VERSION = "3.1.4";
+static const char* FIRMWARE_VERSION = "3.1.5";
 
 // Benötigt die Typdefinitionen für ControlMode und AzimuthDirection.
 // Diese Typen werden hier für globale Konfigurationsvariablen verwendet.
@@ -175,6 +175,14 @@ extern unsigned long WEB_EL_PULSE_MS;
 // PWM-Wert für diese manuellen Web-/Taster-Elevationsbewegungen.
 extern int WEB_EL_PWM;
 
+// Sehr kleine Feinkorrekturen in der Web-UI fuer die abschliessende
+// Signaloptimierung nach einer erfolgreichen Ausrichtung.
+// AZ hat keine PWM-Regelung; die Feinheit wird dort nur ueber die Pulsdauer
+// bestimmt. EL nutzt zusaetzlich einen bewusst niedrigen PWM-Wert.
+extern unsigned long WEB_AZ_FINE_PULSE_MS;
+extern unsigned long WEB_EL_FINE_PULSE_MS;
+extern int WEB_EL_FINE_PWM;
+
 // -----------------------------------------------------
 // 3-Taster-Logik
 // -----------------------------------------------------
@@ -213,6 +221,9 @@ extern float RF_FILTER_ALPHA;
 extern float RF_TV_USABLE_MAX_ADC;
 extern float RF_TV_GOOD_MAX_ADC;
 extern float RF_TV_STRONG_MAX_ADC;
+extern float RF_QUALITY_USABLE_MIN_PERCENT;
+extern float RF_QUALITY_GOOD_MIN_PERCENT;
+extern float RF_QUALITY_STRONG_MIN_PERCENT;
 // -----------------------------------------------------
 // -----------------------------------------------------
 // Kommentarstand: V3
