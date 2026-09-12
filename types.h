@@ -1,24 +1,5 @@
 #pragma once
 
-// =====================================================
-// TestMode
-// =====================================================
-//
-// Diese Enumeration stammt aus der früheren Teststruktur des Projekts.
-//
-// Sie wurde verwendet, um im Hauptsketch gezielt genau einen
-// Testpfad zu aktivieren, z. B. nur Azimut, nur Elevation,
-// nur MPU oder den kombinierten Web-/Manual-Test.
-//
-// Im aktuellen Live-System ist diese Struktur nicht mehr der
-// zentrale Laufzeitpfad, kann aber als Rest/Archiv für ältere
-// Teststände weiter im Projekt liegen.
-enum TestMode {
-  TEST_AZIMUTH,     // isolierter Azimut-Test
-  TEST_ELEVATION,   // isolierter Elevations-Test
-  TEST_MPU6050,     // isolierter MPU-/Winkel-Test
-  TEST_WEB_MANUAL   // kombinierter Web-/Manual-Test
-};
 
 // =====================================================
 // AzimuthDirection

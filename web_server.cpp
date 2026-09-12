@@ -40,6 +40,7 @@
 */
 #include <Arduino.h>
 #include <WebServer.h>
+#include <ElegantOTA.h>
 
 #include "wifi_config.h"
 #include "wifi_manager.h"
@@ -137,9 +138,6 @@ static String chip(const String& text, const String& cssClass) {
   return "<span class='chip " + cssClass + "'>" + esc(text) + "</span>";
 }
 
-static String boolText(bool v) {
-  return v ? "1" : "0";
-}
 
 // V3: Bedienfreundliche Anzeige der Hall-Sensoren.
 // Die fruehere Kurzform C/O/W war fuer Diagnose zwar kompakt, aber fuer die
@@ -292,7 +290,7 @@ static String htmlHeader(const String& title, const String& activePage) {
   html += "<!DOCTYPE html><html><head><meta charset='utf-8'>";
   html += "<meta name='viewport' content='width=device-width, initial-scale=1'>";
   html += "<title>" + esc(title) + "</title><style>" + commonCss() + "</style></head><body><div class='wrap'>";
-  html += "<div class='top'><div class='brand'><div class='logo'>SAT</div><div><h1>SatAlign ESP32</h1><div class='sub'>V3 mobile Web-UI</div></div></div>";
+  html += "<div class='top'><div class='brand'><div class='logo'>SAT</div><div><h1>SatAlign ESP32</h1><div class='sub'>V" + String(FIRMWARE_VERSION) + " mobile Web-UI</div></div></div>";
   html += "<div class='nav'>";
   html += navLink("/", "Menue", "home", activePage);
   html += navLink("/ausrichten", "Grund.", "ausrichten", activePage);
@@ -361,6 +359,7 @@ static String buildHomePage() {
   html += tile("/manuell", "3", "Manuell", "Azimut und Winkel direkt steuern", "t3");
   html += tile("/status", "4", "Status / Diagnose", "RF, Hall, Winkel, Reset", "t4");
   html += tile("/trouble", "5", "Troubleshooting", "Ursache und Empfehlung", "t5");
+  html += tile("/update", "6", "Firmware Update", "ElegantOTA - BIN im Browser laden", "t5");
   html += "</div>";
   html += rfCard();
   html += htmlFooter();
@@ -740,7 +739,6 @@ static String buildTroubleshootingPage() {
   html += "<div class='chips'>" + chip(diagnoseTitle(), cls) + chip(liveGetAutoStateText(), phaseClass(liveGetAutoStateText())) + "</div>";
   html += row("Moegliche Ursache", diagnoseTitle());
   html += row("Empfehlung", diagnoseRecommendation());
-  html += "<div class='note'><b>Hardwaretest:</b><br>Wenn ein einzelnes Bauteil unklar ist, den separaten Sketch <b>SatAlign_ESP32_V3_InstallTest.ino</b> verwenden.</div>";
   html += "<div class='grid2' style='margin-top:12px'>";
   html += actionButton("/status", "Statuswerte", true, "primary");
   html += actionButton("/manuell", "Manuell korrigieren", true, "orange");
@@ -1236,6 +1234,10 @@ void webServerInit() {
   server.on("/candidate/ok", handleCandidateOk);
   server.on("/candidate/false", handleCandidateFalse);
 
+  // V3.1.2: ElegantOTA stellt zusaetzlich zur ArduinoOTA-Funktion die
+  // Browser-Update-Seite unter /update bereit. Beide OTA-Wege bleiben parallel aktiv.
+  ElegantOTA.begin(&server);
+
   server.onNotFound(handleNotFound);
 
   server.begin();
@@ -1248,4 +1250,6 @@ void webServerInit() {
 // werden Browseranfragen, Buttonklicks und API-Abfragen nicht verarbeitet.
 void webServerLoop() {
   server.handleClient();
+  // V3.1.2: ElegantOTA zyklisch bedienen.
+  ElegantOTA.loop();
 }

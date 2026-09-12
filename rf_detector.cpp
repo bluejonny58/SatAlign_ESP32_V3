@@ -351,7 +351,13 @@ float rfGetSignalNorm() {
 
   float norm = (RF_WEAK_REFERENCE_ADC - filteredAdc) / span;
   if (norm < 0.0f) norm = 0.0f;
-  if (norm > 1.0f) norm = 1.0f;
+
+  // V3.1.2 Kalibrierung: Die nutzbare RF-Anzeige wird bewusst auf 95 %
+  // begrenzt. Dadurch bleibt oberhalb sehr guter Empfangswerte etwas Reserve
+  // und die Anzeige steht nicht dauerhaft bei 100 %. Da diese Begrenzung
+  // zentral hier erfolgt, verwenden TFT, Diagnose und AUTO-Logik weiterhin
+  // exakt dieselbe normierte Signalstaerke.
+  if (norm > 0.95f) norm = 0.95f;
   return norm;
 }
 

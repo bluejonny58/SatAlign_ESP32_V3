@@ -13,6 +13,9 @@
 
 #pragma once
 
+// Zentrale Firmware-Version fuer Diagnose, Web-UI und OTA.
+static const char* FIRMWARE_VERSION = "3.1.4";
+
 // Benötigt die Typdefinitionen für ControlMode und AzimuthDirection.
 // Diese Typen werden hier für globale Konfigurationsvariablen verwendet.
 #include "types.h"

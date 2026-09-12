@@ -9,10 +9,10 @@
 
   Aktueller Stand V3:
   - Die Anlage scannt die sichtbaren WLANs.
-  - Aus den bekannten Netzwerken in WIFI_NETWORKS[] wird das sichtbare Netzwerk
-    mit der besten Signalstaerke gewaehlt.
-  - Bei gleicher Signalstaerke bleibt die Reihenfolge in secrets.h die
-    Prioritaet.
+  - Die Reihenfolge in WIFI_NETWORKS[] ist eine feste Prioritaet.
+    GeniusBulli steht lokal an erster Stelle und wird deshalb bevorzugt.
+  - GeniusBulli verwendet die feste IP 192.168.4.15.
+  - Andere bekannte Netze (z. B. GeniusHome) verwenden DHCP.
   - Im laufenden Betrieb erfolgt ein Reconnect nicht-blockierend, damit TFT,
     Tasten, Motoren, Suche und lokale Bedienung weiterlaufen.
 */
@@ -42,7 +42,8 @@ static const unsigned long WIFI_SCAN_TIMEOUT_MS = 10000UL;
 static const int WIFI_RSSI_UNKNOWN = -999;
 
 // V3: Merkt sich das zuletzt erfolgreiche Netzwerk. Bei einem Reconnect wird
-// zwar erneut nach Signalstaerke gescannt; falls kein Scan-Ergebnis vorliegt,
+// erneut nach bekannten Netzen in Prioritaetsreihenfolge gescannt; falls kein
+// Scan-Ergebnis vorliegt,
 // dient dieser Index als sinnvolle Rueckfallloesung.
 static int currentNetworkIndex = -1;
 static int currentNetworkRssi = WIFI_RSSI_UNKNOWN;
@@ -69,9 +70,10 @@ static String rssiText(int rssi) {
 }
 
 // V3: Auswertung eines WLAN-Scans. Es werden nur Netzwerke beruecksichtigt,
-// die in secrets.h in WIFI_NETWORKS[] eingetragen sind. Dadurch verbindet sich
-// die Anlage nie mit fremden Netzen, sondern waehlt nur aus den bekannten
-// Zugangsdaten das Netz mit der besten Empfangsstaerke.
+// die in secrets.h in WIFI_NETWORKS[] eingetragen sind. Die Reihenfolge der
+// Eintraege ist die feste Prioritaet: Der erste sichtbare bekannte Eintrag wird
+// verwendet. So bleibt GeniusBulli auch dann das bevorzugte Netz, wenn am
+// Testort gleichzeitig GeniusHome mit hoeherem RSSI sichtbar ist.
 static int bestKnownNetworkFromScanResult(int scanCount, bool printResult) {
   int bestIndex = -1;
   int bestRssi = WIFI_RSSI_UNKNOWN;
@@ -103,11 +105,9 @@ static int bestKnownNetworkFromScanResult(int scanCount, bool printResult) {
       Serial.println(rssiText(foundRssi));
     }
 
-    // V3: Hoeherer RSSI-Wert ist besser, z. B. -48 dBm besser als -70 dBm.
-    // Bei exakt gleichem Wert bleibt der fruehere Eintrag durch > statt >=
-    // bevorzugt. Damit bleibt die Reihenfolge in secrets.h als Prioritaet
-    // erhalten, wenn die Signalstaerke praktisch gleich ist.
-    if (foundRssi > bestRssi) {
+    // Feste Prioritaet: Sobald der erste sichtbare bekannte Eintrag gefunden
+    // wurde, bleibt er ausgewaehlt. RSSI wird weiterhin fuer Diagnose angezeigt.
+    if (bestIndex < 0 && foundRssi > WIFI_RSSI_UNKNOWN / 2) {
       bestRssi = foundRssi;
       bestIndex = known;
     }
@@ -115,7 +115,7 @@ static int bestKnownNetworkFromScanResult(int scanCount, bool printResult) {
 
   if (printResult) {
     if (validNetworkIndex(bestIndex)) {
-      Serial.print("WLAN V3: bestes bekanntes Netzwerk: ");
+      Serial.print("WLAN V3: bevorzugtes sichtbares Netzwerk: ");
       Serial.print(WIFI_NETWORKS[bestIndex].ssid);
       Serial.print(" (");
       Serial.print(bestRssi);
@@ -130,7 +130,7 @@ static int bestKnownNetworkFromScanResult(int scanCount, bool printResult) {
 
 // V3: Blockierender Startscan nur in wifiInit(). Zu diesem Zeitpunkt laeuft
 // noch keine Motorfahrt; deshalb ist ein kurzer Scan vertretbar und verbessert
-// die Netzwahl gegenueber einer reinen festen Prioritaet.
+// die Auswahl des ersten sichtbaren bekannten Netzes gemaess Prioritaetsliste.
 static int scanBestKnownNetworkBlocking() {
   Serial.println("WLAN V3: scanne sichtbare Netzwerke...");
   const int scanCount = WiFi.scanNetworks(false, true);
@@ -146,13 +146,50 @@ static int scanBestKnownNetworkBlocking() {
   return bestIndex;
 }
 
-// V3: Hilfsfunktion zum Starten eines konkreten Netzwerks aus secrets.h.
-// Diese Funktion startet nur den Verbindungsaufbau. Ob die Verbindung klappt,
-// wird danach entweder blockierend in wifiInit() oder nicht-blockierend in
-// wifiLoop() ausgewertet.
-static void beginNetwork(int index) {
+// Setzt vor jedem Verbindungsversuch die passende IP-Konfiguration.
+// GeniusBulli: feste IP 192.168.4.15 / Gateway 192.168.4.1 /24.
+// Alle anderen Netze: DHCP. Das explizite Zurueckschalten auf DHCP ist wichtig,
+// wenn der ESP32 zuvor im Bulli-Netz mit statischer IP verbunden war.
+static bool configureIpForNetwork(int index) {
   if (!validNetworkIndex(index)) {
-    return;
+    return false;
+  }
+
+  const bool isBulli = String(WIFI_NETWORKS[index].ssid) == String(WIFI_BULLI_SSID);
+
+  if (isBulli) {
+    const IPAddress localIp(WIFI_BULLI_IP[0], WIFI_BULLI_IP[1], WIFI_BULLI_IP[2], WIFI_BULLI_IP[3]);
+    const IPAddress gateway(WIFI_BULLI_GATEWAY[0], WIFI_BULLI_GATEWAY[1], WIFI_BULLI_GATEWAY[2], WIFI_BULLI_GATEWAY[3]);
+    const IPAddress subnet(WIFI_BULLI_SUBNET[0], WIFI_BULLI_SUBNET[1], WIFI_BULLI_SUBNET[2], WIFI_BULLI_SUBNET[3]);
+    const IPAddress dns(WIFI_BULLI_DNS[0], WIFI_BULLI_DNS[1], WIFI_BULLI_DNS[2], WIFI_BULLI_DNS[3]);
+
+    Serial.println("WLAN V3: IP-Modus = statisch (GeniusBulli 192.168.4.15)");
+    if (!WiFi.config(localIp, gateway, subnet, dns)) {
+      Serial.println("WLAN V3: FEHLER - statische IP-Konfiguration fehlgeschlagen.");
+      return false;
+    }
+    return true;
+  }
+
+  Serial.println("WLAN V3: IP-Modus = DHCP");
+  if (!WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE)) {
+    Serial.println("WLAN V3: FEHLER - DHCP konnte nicht aktiviert werden.");
+    return false;
+  }
+  return true;
+}
+
+// V3: Hilfsfunktion zum Starten eines konkreten Netzwerks aus secrets.h.
+// Diese Funktion setzt zuerst die netzabhaengige IP-Konfiguration und startet
+// danach den Verbindungsaufbau. Ob die Verbindung klappt, wird anschliessend
+// blockierend in wifiInit() oder nicht-blockierend in wifiLoop() ausgewertet.
+static bool beginNetwork(int index) {
+  if (!validNetworkIndex(index)) {
+    return false;
+  }
+
+  if (!configureIpForNetwork(index)) {
+    return false;
   }
 
   Serial.print("WLAN V3: verbinde mit Netzwerk ");
@@ -163,13 +200,16 @@ static void beginNetwork(int index) {
   Serial.println(WIFI_NETWORKS[index].ssid);
 
   WiFi.begin(WIFI_NETWORKS[index].ssid, WIFI_NETWORKS[index].password);
+  return true;
 }
 
 // V3: Versucht ein bestimmtes Netzwerk und wartet kurz auf Verbindung.
 // Wird bewusst nur in wifiInit() verwendet. Der spaetere Reconnect laeuft
 // nicht-blockierend ueber wifiLoop(), damit keine Motorbewegung haengen bleibt.
 static bool tryNetworkBlocking(int index) {
-  beginNetwork(index);
+  if (!beginNetwork(index)) {
+    return false;
+  }
 
   for (int attempt = 0; attempt < WIFI_ATTEMPTS_PER_NETWORK; attempt++) {
     if (WiFi.status() == WL_CONNECTED) {
@@ -202,9 +242,8 @@ static bool tryNetworkBlocking(int index) {
 }
 
 // V3: Durchsucht beim Boot alle in secrets.h hinterlegten Netzwerke. Primaer
-// wird das sichtbare Netzwerk mit dem besten RSSI versucht. Wenn dieses nicht
-// verbindet, werden die restlichen bekannten Netzwerke nach Reihenfolge in
-// secrets.h versucht.
+// wird das erste sichtbare Netzwerk gemaess fester Prioritaetsreihenfolge
+// versucht. Wenn dieses nicht verbindet, folgen die restlichen Eintraege.
 static bool connectToKnownNetworkBlocking() {
   if (WIFI_NETWORK_COUNT <= 0) {
     Serial.println("WLAN V3: keine Netzwerke in secrets.h eingetragen.");
@@ -256,15 +295,20 @@ static void startNonBlockingReconnectAttempt(int index) {
     return;
   }
 
-  reconnectConnecting = true;
-  reconnectConnectingIndex = index;
-  reconnectStartMs = millis();
-
   // Kein WiFi.disconnect(true): true kann gespeicherte Verbindungsdaten loeschen
   // bzw. den WLAN-Stack unnoetig hart zuruecksetzen. Fuer den laufenden Betrieb
   // reicht ein normales disconnect(), bevor das naechste Netzwerk versucht wird.
   WiFi.disconnect();
-  beginNetwork(index);
+  if (!beginNetwork(index)) {
+    reconnectConnecting = false;
+    reconnectConnectingIndex = -1;
+    nextReconnectAttemptMs = millis() + WIFI_RECONNECT_INTERVAL_MS;
+    return;
+  }
+
+  reconnectConnecting = true;
+  reconnectConnectingIndex = index;
+  reconnectStartMs = millis();
 }
 
 // V3: Erfolgreichen Reconnect abschliessen und Status sauber ausgeben.
@@ -382,7 +426,7 @@ void wifiInit() {
   WiFi.mode(WIFI_STA);
 
   // V3: WLAN-Schlafmodus deaktivieren.
-  // Hintergrund: Bei einigen ESP32/Router-Kombinationen werden mDNS/OTA-
+  // Hintergrund: Bei einigen ESP32/Router-Kombinationen werden OTA-/WLAN-
   // Pakete unzuverlaessig sichtbar, wenn der WLAN-Sleep aktiv ist.
   WiFi.setSleep(false);
 

@@ -241,7 +241,9 @@ unsigned long BTN_MODE_LONGPRESS_MS = 700;
 int RF_ADC_SAMPLES_PER_CYCLE = 32;
 
 // Glättungsfaktor für das RF-Signal
-float RF_FILTER_ALPHA = 0.90f;
+// V3.1.4: 0.50 nach reproduzierbarem RF-/Azimut-Test. Der Filter folgt
+// realen Signaländerungen deutlich schneller als 0.75, bleibt aber ruhiger als 0.25.
+float RF_FILTER_ALPHA = 0.50f;
 
 // -----------------------------------------------------
 // RF-Bewertung aus Aussentest / TV-Bild-Grenzen
@@ -283,6 +285,31 @@ float RF_TV_STRONG_MAX_ADC = 750.0f;   // unterhalb: sehr guter/Peak-naher Berei
 float AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT = 75.0f;
 
 // -----------------------------------------------------
+// V3_0_4: Dynamische RF-Referenz aus der Centerfahrt
+// -----------------------------------------------------
+// Kommentarstand: V3_0_4 Dynamic RF Reference
+//
+// Waehrend einer echten Mittenfahrt werden die staerksten RF-Prozentwerte
+// gesammelt. Nach erfolgreichem Abschluss wird daraus eine optionale
+// dynamische Referenz fuer die anschliessende AUTO-Suchfahrt berechnet.
+//
+// Sicherheitsprinzip:
+// - Die Referenz ist optional.
+// - Sie wird nur genutzt, wenn sie plausibel stark ist.
+// - Die normale DROP_ADC-Kandidatenerkennung bleibt aktiv.
+// - Die dynamische Schwelle darf nie unter AUTO_RF_MIN_CANDIDATE_PERCENT fallen.
+// - Es wird weiterhin nichts in NVS/Preferences gespeichert.
+bool  AUTO_CENTER_RF_REFERENCE_ENABLED = true;
+int   AUTO_CENTER_RF_REFERENCE_TOP_COUNT = 5;
+float AUTO_CENTER_RF_REFERENCE_MIN_PERCENT = 65.0f;
+float AUTO_CENTER_RF_REFERENCE_TOLERANCE_PERCENT = 8.0f;
+// V3.1.3: Einheitliche Mindestschwelle fuer die normale AUTO-Suche.
+// Aus den realen Aussentests ergibt sich: unter 80 % ist das Signal fuer die
+// automatische Ausrichtung nicht ausreichend. Anzeige und AUTO-Logik verwenden
+// weiterhin dieselbe RF-Prozentberechnung.
+float AUTO_RF_MIN_CANDIDATE_PERCENT = 80.0f;
+
+// -----------------------------------------------------
 // RF-Referenz- und AUTO-Schwellwerte
 // -----------------------------------------------------
 // Kommentarstand: V3_01
@@ -301,8 +328,13 @@ float AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT = 75.0f;
 // Referenzwerte fuer die Prozentanzeige / Signalnormierung.
 // RF_WEAK_REFERENCE_ADC beschreibt den typischen schwachen/No-Signal-Bereich.
 // RF_STRONG_REFERENCE_ADC beschreibt einen typischen starken Satelliten-Punkt.
+// V3.1.2 RF-Kalibrierung: Auch 1100 ADC fuehrte im realen Betrieb noch zu
+// haeufig zu einer 100-%-Anzeige. Der Strong-Referenzwert wurde deshalb auf
+// 700 ADC abgesenkt. Dadurch wird der obere Signalbereich deutlich weiter
+// gespreizt; 100 % wird erst bei wirklich sehr starken Signalen erreicht.
+// Anzeige und AUTO-Logik verwenden weiterhin exakt dieselbe RF-Skala.
 float RF_WEAK_REFERENCE_ADC   = 1883.0f;
-float RF_STRONG_REFERENCE_ADC = 1287.0f;
+float RF_STRONG_REFERENCE_ADC = 700.0f;
 
 // Mindest-DROP gegen die RF-Baseline, ab dem ueberhaupt von einem
 // verwertbaren Signalweg gesprochen wird. Dieser Wert ist bewusst niedrig
@@ -437,7 +469,7 @@ static void applyDefaultSettings() {
 
   // RF
   RF_ADC_SAMPLES_PER_CYCLE = 32;
-  RF_FILTER_ALPHA = 0.90f;
+  RF_FILTER_ALPHA = 0.50f;
 
   // V3: RF-Ampelwerte aus Aussentest. Diese Werte bewerten die
   // Signalqualitaet, blockieren PLUS bewusst nicht; der Nutzer entscheidet am TV/Receiver.
@@ -451,11 +483,18 @@ static void applyDefaultSettings() {
   // in live_runtime.cpp durchsuchen zu muessen.
   AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT = 75.0f;
 
+  // V3_0_4: Dynamische RF-Referenz aus der Centerfahrt.
+  AUTO_CENTER_RF_REFERENCE_ENABLED = true;
+  AUTO_CENTER_RF_REFERENCE_TOP_COUNT = 5;
+  AUTO_CENTER_RF_REFERENCE_MIN_PERCENT = 65.0f;
+  AUTO_CENTER_RF_REFERENCE_TOLERANCE_PERCENT = 8.0f;
+  AUTO_RF_MIN_CANDIDATE_PERCENT = 80.0f;
+
   // V3_01: Zentrale RF-/AUTO-Schwellwerte.
   // Diese Werte werden bewusst im Code gesetzt und nicht im ESP32-Flash
   // gespeichert. Dadurch sind Testaenderungen nachvollziehbar und reproduzierbar.
   RF_WEAK_REFERENCE_ADC   = 1883.0f;
-  RF_STRONG_REFERENCE_ADC = 1287.0f;
+  RF_STRONG_REFERENCE_ADC = 700.0f;
   RF_VALID_DROP_ADC = 30.0f;
 
   AUTO_RF_CANDIDATE_DROP_ADC = 100.0f;
@@ -601,6 +640,16 @@ void printSettingsToSerial() {
   Serial.println(RF_TV_STRONG_MAX_ADC, 1);
   Serial.print("AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT = ");
   Serial.println(AUTO_CENTER_RF_MIN_GOOD_SIGNAL_PERCENT, 1);
+  Serial.print("AUTO_CENTER_RF_REFERENCE_ENABLED = ");
+  Serial.println(AUTO_CENTER_RF_REFERENCE_ENABLED ? "true" : "false");
+  Serial.print("AUTO_CENTER_RF_REFERENCE_TOP_COUNT = ");
+  Serial.println(AUTO_CENTER_RF_REFERENCE_TOP_COUNT);
+  Serial.print("AUTO_CENTER_RF_REFERENCE_MIN_PERCENT = ");
+  Serial.println(AUTO_CENTER_RF_REFERENCE_MIN_PERCENT, 1);
+  Serial.print("AUTO_CENTER_RF_REFERENCE_TOLERANCE_PERCENT = ");
+  Serial.println(AUTO_CENTER_RF_REFERENCE_TOLERANCE_PERCENT, 1);
+  Serial.print("AUTO_RF_MIN_CANDIDATE_PERCENT = ");
+  Serial.println(AUTO_RF_MIN_CANDIDATE_PERCENT, 1);
 
   Serial.print("RF_WEAK_REFERENCE_ADC = ");
   Serial.println(RF_WEAK_REFERENCE_ADC, 1);

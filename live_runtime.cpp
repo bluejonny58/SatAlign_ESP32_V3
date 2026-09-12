@@ -434,6 +434,28 @@ namespace {
   uint8_t autoCenterRfConfirmCounter = 0;
   unsigned long autoCenterRfNextConfirmAtMs = 0;
 
+  // V3_0_4 Dynamic RF Reference:
+  // Waehrend jeder echten Mittenfahrt werden die staerksten RF-Werte gesammelt.
+  // Nach erfolgreichem Abschluss entsteht daraus eine optionale dynamische
+  // Mindestschwelle fuer die anschliessende Suchfahrt. Dadurch werden sehr
+  // schwache Zufallssignale besser ausgefiltert, ohne die bewaehrte DROP_ADC-
+  // Kandidatenerkennung zu ersetzen.
+  struct CenterRfTopSample {
+    bool valid = false;
+    float percent = 0.0f;
+    float dropAdc = 0.0f;
+    int azSteps = 0;
+    unsigned long atMs = 0;
+  };
+
+  static const int CENTER_RF_REFERENCE_MAX_TOP_COUNT = 5;
+  CenterRfTopSample centerRfTopSamples[CENTER_RF_REFERENCE_MAX_TOP_COUNT];
+  uint16_t centerRfReferenceSampleCount = 0;
+  bool centerRfReferenceUsable = false;
+  float centerRfReferencePercent = 0.0f;
+  float centerRfDynamicCandidateMinPercent = 0.0f;
+  unsigned long centerRfLastDiagMs = 0;
+
   // Ziel-Azimut für das Verlassen eines gesperrten Bereichs.
   int autoResumeTargetAzSteps = 0;
 
@@ -463,6 +485,17 @@ namespace {
   unsigned long autoFineStepPhaseStartedAtMs = 0;
   unsigned long autoLastAzStepCounter = 0;
   unsigned long autoLastRfDiagMs = 0;
+
+  // V3.1.4 AUTO-Log-Diagnose:
+  // Während eines kompletten automatischen Suchlaufs wird ein kompakter,
+  // kopierbarer Datenblock auf Serial ausgegeben. Die Suchlogik selbst wird
+  // dadurch nicht verändert.
+  bool autoLogActive = false;
+  bool autoLogEndPrinted = false;
+  unsigned long autoLogStartedAtMs = 0;
+  unsigned long autoLogLastPrintMs = 0;
+  AutoState autoLogLastState = AUTO_STATE_INACTIVE;
+
   float autoRfZeroAdc = 0.0f;
   float autoRfBestAdc = 4095.0f;
   float autoRfCurrentAdc = 0.0f;
@@ -496,8 +529,6 @@ namespace {
 
   // Von der Referenz aus angenommene grobe Astra-Startlage.
   static const AzimuthDirection AUTO_PRESET_DIRECTION = AZ_DIR_EAST;
-  static const int AUTO_PRESET_STEPS = 10;
-  static const unsigned long AUTO_PRESET_PULSE_MS = 220;
 
   // Neue AUTO-Suche:
   // Die Position wird bei Dauerfahrt in Pseudo-Schritten gefuehrt, damit
@@ -529,11 +560,8 @@ namespace {
   static const unsigned long AUTO_FINE_STEP_OFF_MS = 300;
 
   // Grobsuche: relativ große Schritte.
-  static const int AUTO_SCAN_COARSE_SIDE_STEPS = 8;
-  static const unsigned long AUTO_SCAN_COARSE_PULSE_MS = 220;
 
   // Feine manuelle Azimutkorrektur im Kandidatenmodus.
-  static const unsigned long AUTO_SCAN_FINE_PULSE_MS = 90;
 
   // Einschwingzeit nach einem Azimutimpuls.
   static const unsigned long AUTO_AZ_SETTLE_MS = 180;
@@ -590,17 +618,6 @@ namespace {
   // - MODE lang = AUTO abbrechen
   // Alte MODE-Mehrfachklick-Zustaende wurden aus dem aktiven Ablauf entfernt.
 
-  // AUTO-Elevation-Suchraster relativ zur Start-Elevation.
-  // Fuer Deutschland/Astra 19.2E wird bewusst in kleinen 1-Grad-Schritten gesucht,
-  // weil 2 Grad bei der Elevation bereits zu grob sein koennen.
-  // Ziele ausserhalb der EZ-Softlimits werden spaeter automatisch uebersprungen.
-  static const float AUTO_ELEVATION_OFFSETS_DEG[] = {
-    0.0f, +1.0f, -1.0f, +2.0f, -2.0f, +3.0f, -3.0f,
-    +4.0f, -4.0f, +5.0f, -5.0f, +6.0f, -6.0f
-  };
-
-  static const int AUTO_ELEVATION_OFFSET_COUNT =
-      sizeof(AUTO_ELEVATION_OFFSETS_DEG) / sizeof(AUTO_ELEVATION_OFFSETS_DEG[0]);
 }
 
 // =====================================================
@@ -719,14 +736,6 @@ static float currentRelativeAngle() {
 //
 // Dadurch bleibt der Bezug sichtbar im Sketch definiert und wird nicht
 // ueber NVS/Preferences gespeichert.
-static void setCurrentMpuAsSessionStartElevation() {
-  // Bewusst deaktiviert.
-  // Die Elevation wird nicht mehr ueber eine Session-Referenz gesetzt,
-  // sondern direkt als angezeigter Winkel berechnet:
-  // 90 - FiltX + DISPLAY_ANGLE_OFFSET_DEG.
-  // Funktion bleibt nur als Kompatibilitaetsplatzhalter erhalten.
-  Serial.println("MPU-Session-Referenz: deaktiviert, nutze direkten EZ-Anzeigewinkel.");
-}
 
 static bool canMoveElevationUp() {
   if (!mpuOk) return true;
@@ -743,30 +752,10 @@ static bool canMoveElevationDown() {
 // nicht anfahren. Die Grenzen beziehen sich auf denselben angezeigten
 // Elevationswinkel wie currentRelativeAngle() und enthalten damit auch
 // DISPLAY_ANGLE_OFFSET_DEG.
-static bool autoElevationTargetWithinSoftLimits(float targetDeg) {
-  return targetDeg >= ELEVATION_MIN_SOFT && targetDeg <= ELEVATION_MAX_SOFT;
-}
 
 // Misst ein lokales RF-Schwankungsband im aktuellen Stillstand.
 // Diese kurze Messung dient dazu, typische Schwankungen ohne echten Peak
 // abzuschätzen. Daraus werden die dynamischen Umschaltschwellen gebildet.
-static float measureRfNoiseBandV(uint8_t samples, unsigned long delayMs) {
-  float minV = 99.0f;
-  float maxV = -99.0f;
-
-  if (samples < 2) samples = 2;
-
-  for (uint8_t i = 0; i < samples; i++) {
-    rfUpdate();
-    const float v = rfGetPinVoltage();
-    if (v < minV) minV = v;
-    if (v > maxV) maxV = v;
-    delay(delayMs);
-  }
-
-  const float band = maxV - minV;
-  return (band < 0.0f) ? 0.0f : band;
-}
 
 
 // Dynamische Schwellen für Kandidaten-/Feinlogik ableiten.
@@ -1205,6 +1194,11 @@ static void resetAutoState() {
   autoFineStepPhaseStartedAtMs = 0;
   autoLastAzStepCounter = 0;
   autoLastRfDiagMs = 0;
+  autoLogActive = false;
+  autoLogEndPrinted = false;
+  autoLogStartedAtMs = 0;
+  autoLogLastPrintMs = 0;
+  autoLogLastState = AUTO_STATE_INACTIVE;
   autoRfZeroAdc = 0.0f;
   autoRfBestAdc = 4095.0f;
   autoRfCurrentAdc = 0.0f;
@@ -1287,6 +1281,18 @@ static void startAutoSequence() {
 
   autoState = AUTO_STATE_NEW_CENTER_START;
 
+  autoLogActive = true;
+  autoLogEndPrinted = false;
+  autoLogStartedAtMs = millis();
+  autoLogLastPrintMs = 0;
+  autoLogLastState = AUTO_STATE_INACTIVE;
+  Serial.println();
+  Serial.println("# ============================================================================");
+  Serial.println("# AUTO_LOG_BEGIN");
+  Serial.println("# V3.1.4 | Suchlogik unveraendert | bereinigtes AUTO-Protokoll");
+  Serial.println("# T_MS;STATE;DIR;RAW;FILTER;SIGNAL;DROP;ZERO_ADC;BEST_ADC;AZPOS;EZ;H_C;H_E;H_W;MIN_RF;CENTER_MIN;BLOCKED");
+  Serial.println("# ----------------------------------------------------------------------------");
+
   Serial.print("SUCHE START V3 | Ablauf=Mitte->Ost->West->Mitte->Hoehe pruefen");
   Serial.print(" | Basis-Hoehe = ");
   Serial.println(autoBaseElevationDeg, 2);
@@ -1368,9 +1374,6 @@ static float currentCandidateImprovement() {
 
 // Kandidat ist vorhanden, wenn die Verbesserung oberhalb der dynamischen
 // Enter-Schwelle liegt.
-static bool candidateLooksStrongEnough() {
-  return currentCandidateImprovement() >= autoCandidateEnterThresholdV;
-}
 
 // Forward-Deklaration: Wird von Web-/Runtime-Kommandos vor der eigentlichen
 // Funktionsdefinition genutzt. Noetig, damit die Arduino/C++-Kompilierung
@@ -1430,7 +1433,10 @@ static void autoUpdateRfTracker() {
   autoRfDropAdc = autoRfZeroAdc - adc;
   if (autoRfDropAdc < 0.0f) autoRfDropAdc = 0.0f;
 
-  if (millis() - autoLastRfDiagMs >= AUTO_RF_DIAG_INTERVAL_MS) {
+  // Waehren eines strukturierten AUTO_LOG-Laufs sind ADC/ZERO/BEST/DROP
+  // bereits in jeder AUTO-Datenzeile enthalten. Diese alte periodische
+  // Diagnose bleibt nur fuer Sonderpfade ohne AUTO_LOG erhalten.
+  if (!autoLogActive && millis() - autoLastRfDiagMs >= AUTO_RF_DIAG_INTERVAL_MS) {
     autoLastRfDiagMs = millis();
     Serial.print("AUTO RF | ADC=");
     Serial.print(autoRfCurrentAdc, 1);
@@ -1613,6 +1619,206 @@ static void autoServiceAzPositionDuringCenter() {
   }
 }
 
+static int centerRfReferenceTopCount() {
+  int count = AUTO_CENTER_RF_REFERENCE_TOP_COUNT;
+  if (count < 1) count = 1;
+  if (count > CENTER_RF_REFERENCE_MAX_TOP_COUNT) count = CENTER_RF_REFERENCE_MAX_TOP_COUNT;
+  return count;
+}
+
+static float maxFloatLocal(float a, float b) {
+  return (a > b) ? a : b;
+}
+
+static void centerRfReferenceReset(const char* reason) {
+  for (int i = 0; i < CENTER_RF_REFERENCE_MAX_TOP_COUNT; i++) {
+    centerRfTopSamples[i].valid = false;
+    centerRfTopSamples[i].percent = 0.0f;
+    centerRfTopSamples[i].dropAdc = 0.0f;
+    centerRfTopSamples[i].azSteps = 0;
+    centerRfTopSamples[i].atMs = 0;
+  }
+
+  centerRfReferenceSampleCount = 0;
+  centerRfReferenceUsable = false;
+  centerRfReferencePercent = 0.0f;
+  centerRfDynamicCandidateMinPercent = AUTO_RF_MIN_CANDIDATE_PERCENT;
+  centerRfLastDiagMs = 0;
+
+  Serial.print("CENTER RF REF: Reset");
+  if (reason && reason[0]) {
+    Serial.print(" | ");
+    Serial.print(reason);
+  }
+  Serial.println();
+}
+
+static void centerRfReferenceInsertTopSample(float percent, float dropAdc) {
+  if (!AUTO_CENTER_RF_REFERENCE_ENABLED) return;
+  if (percent <= 0.0f) return;
+
+  // Sehr kleine Aenderungen werden nicht als Referenzsample genutzt. Dadurch
+  // erzeugt eine komplett signalfreie Centerfahrt keine scheinbar gute Referenz.
+  if (dropAdc < RF_VALID_DROP_ADC) return;
+
+  const int topCount = centerRfReferenceTopCount();
+  int insertIndex = -1;
+
+  for (int i = 0; i < topCount; i++) {
+    if (!centerRfTopSamples[i].valid) {
+      insertIndex = i;
+      break;
+    }
+  }
+
+  if (insertIndex < 0) {
+    int weakestIndex = 0;
+    float weakestPercent = centerRfTopSamples[0].percent;
+    for (int i = 1; i < topCount; i++) {
+      if (centerRfTopSamples[i].percent < weakestPercent) {
+        weakestPercent = centerRfTopSamples[i].percent;
+        weakestIndex = i;
+      }
+    }
+
+    if (percent <= weakestPercent) {
+      return;
+    }
+    insertIndex = weakestIndex;
+  }
+
+  centerRfTopSamples[insertIndex].valid = true;
+  centerRfTopSamples[insertIndex].percent = percent;
+  centerRfTopSamples[insertIndex].dropAdc = dropAdc;
+  centerRfTopSamples[insertIndex].azSteps = azPositionSteps;
+  centerRfTopSamples[insertIndex].atMs = millis();
+}
+
+static void centerRfReferenceService() {
+  if (!AUTO_CENTER_RF_REFERENCE_ENABLED) return;
+  if (!centerHomingStarted) return;
+
+  // Nur waehrend der echten Bewegung/Messung sammeln, nicht im Warte-, Fehler-
+  // oder Fertigzustand.
+  if (centerTimingState == CENTER_TIMING_IDLE ||
+      centerTimingState == CENTER_TIMING_DONE ||
+      centerTimingState == CENTER_TIMING_FAILED) {
+    return;
+  }
+
+  rfUpdate();
+  const float percent = rfGetSignalPercent();
+  float dropAdc = rfGetDropAdc();
+  if (dropAdc < 0.0f) dropAdc = 0.0f;
+
+  centerRfReferenceSampleCount++;
+  centerRfReferenceInsertTopSample(percent, dropAdc);
+
+  const unsigned long now = millis();
+  // Im Menue ist diese Diagnose weiterhin hilfreich. Im AUTO-Lauf stehen
+  // dieselben RF-Werte bereits im kompakten AUTO_LOG und werden hier nicht
+  // doppelt ausgegeben.
+  if (!autoLogActive && now - centerRfLastDiagMs >= AUTO_RF_DIAG_INTERVAL_MS) {
+    centerRfLastDiagMs = now;
+    Serial.print("CENTER RF REF | RF%=");
+    Serial.print(percent, 0);
+    Serial.print(" | DROP=");
+    Serial.print(dropAdc, 1);
+    Serial.print(" | SAMPLES=");
+    Serial.print(centerRfReferenceSampleCount);
+    Serial.print(" | OWNER=");
+    Serial.println(centerOwner == CENTER_OWNER_AUTO ? "AUTO" : "MENU");
+  }
+}
+
+static void centerRfReferenceFinalize(const char* reason) {
+  if (!AUTO_CENTER_RF_REFERENCE_ENABLED) {
+    centerRfReferenceUsable = false;
+    centerRfReferencePercent = 0.0f;
+    centerRfDynamicCandidateMinPercent = AUTO_RF_MIN_CANDIDATE_PERCENT;
+    return;
+  }
+
+  const int topCount = centerRfReferenceTopCount();
+  float sum = 0.0f;
+  int validCount = 0;
+
+  for (int i = 0; i < topCount; i++) {
+    if (centerRfTopSamples[i].valid) {
+      sum += centerRfTopSamples[i].percent;
+      validCount++;
+    }
+  }
+
+  if (validCount <= 0) {
+    centerRfReferenceUsable = false;
+    centerRfReferencePercent = 0.0f;
+    centerRfDynamicCandidateMinPercent = AUTO_RF_MIN_CANDIDATE_PERCENT;
+    Serial.print("CENTER RF REF: keine brauchbare Referenz");
+    if (reason && reason[0]) {
+      Serial.print(" | ");
+      Serial.print(reason);
+    }
+    Serial.println();
+    return;
+  }
+
+  centerRfReferencePercent = sum / (float)validCount;
+  centerRfReferenceUsable = centerRfReferencePercent >= AUTO_CENTER_RF_REFERENCE_MIN_PERCENT;
+  centerRfDynamicCandidateMinPercent = maxFloatLocal(
+    AUTO_RF_MIN_CANDIDATE_PERCENT,
+    centerRfReferencePercent - AUTO_CENTER_RF_REFERENCE_TOLERANCE_PERCENT
+  );
+
+  Serial.print("CENTER RF REF: Finalisiert");
+  if (reason && reason[0]) {
+    Serial.print(" | ");
+    Serial.print(reason);
+  }
+  Serial.print(" | Top=");
+  Serial.print(validCount);
+  Serial.print(" | Ref%=");
+  Serial.print(centerRfReferencePercent, 1);
+  Serial.print(" | DynMin%=");
+  Serial.print(centerRfDynamicCandidateMinPercent, 1);
+  Serial.print(" | Aktiv=");
+  Serial.println(centerRfReferenceUsable ? "JA" : "NEIN");
+}
+
+static void centerRfReferenceInvalidate(const char* reason) {
+  centerRfReferenceUsable = false;
+  centerRfReferencePercent = 0.0f;
+  centerRfDynamicCandidateMinPercent = AUTO_RF_MIN_CANDIDATE_PERCENT;
+  Serial.print("CENTER RF REF: deaktiviert");
+  if (reason && reason[0]) {
+    Serial.print(" | ");
+    Serial.print(reason);
+  }
+  Serial.println();
+}
+
+static bool candidatePassesDynamicCenterReference() {
+  if (!AUTO_CENTER_RF_REFERENCE_ENABLED) return true;
+  if (!centerRfReferenceUsable) return true;
+
+  const float percent = rfGetSignalPercent();
+  if (percent >= centerRfDynamicCandidateMinPercent) {
+    return true;
+  }
+
+  if (!autoLogActive && millis() - autoLastRfDiagMs >= AUTO_RF_DIAG_INTERVAL_MS) {
+    autoLastRfDiagMs = millis();
+    Serial.print("AUTO RF: Kandidat unter dynamischer Center-Referenz | RF%=");
+    Serial.print(percent, 0);
+    Serial.print(" < DynMin%=");
+    Serial.print(centerRfDynamicCandidateMinPercent, 0);
+    Serial.print(" | Ref%=");
+    Serial.println(centerRfReferencePercent, 0);
+  }
+
+  return false;
+}
+
 static void autoStartCandidateHold(AutoState resumeState, const char* source) {
   autoStopAzDrive();
 
@@ -1651,12 +1857,48 @@ static bool autoServiceRfAndCandidate(AutoState resumeState) {
     return false;
   }
 
-  if (autoRfDropAdc >= AUTO_RF_CANDIDATE_DROP_ADC) {
-    autoStartCandidateHold(resumeState, "RF_DROP");
-    return true;
+  // Aktuellen, normierten Signalwert einmalig auslesen.
+  // Dieser feste Mindestwert muss IMMER erreicht werden, damit der
+  // Azimutmotor wegen eines RF-Kandidaten gestoppt werden darf.
+  const float signalPercent = rfGetSignalPercent();
+
+  // Grundbedingung 1:
+  // Das Signal muss sich ausreichend deutlich von der RF-Baseline abheben.
+  if (autoRfDropAdc < AUTO_RF_CANDIDATE_DROP_ADC) {
+    return false;
   }
 
-  return false;
+  // Grundbedingung 2:
+  // Der in settings.cpp eingestellte Mindest-Signalwert muss erreicht sein.
+  // Dadurch stoppt der AZ-Motor nicht mehr bei Kandidaten unterhalb dieses
+  // Prozentwertes, auch wenn der ADC-Drop bereits gross genug ist.
+  if (signalPercent < AUTO_RF_MIN_CANDIDATE_PERCENT) {
+    if (!autoLogActive && millis() - autoLastRfDiagMs >= AUTO_RF_DIAG_INTERVAL_MS) {
+      autoLastRfDiagMs = millis();
+      Serial.print("AUTO RF: Kandidat unter festem Mindestwert | RF%=");
+      Serial.print(signalPercent, 0);
+      Serial.print(" < Min%=");
+      Serial.print(AUTO_RF_MIN_CANDIDATE_PERCENT, 0);
+      Serial.print(" | DROP_ADC=");
+      Serial.println(autoRfDropAdc, 1);
+    }
+    return false;
+  }
+
+  // Optionaler Zusatzfilter aus der Centerfahrt:
+  // Falls waehrend der Centerfahrt eine brauchbare dynamische Referenz
+  // ermittelt wurde, muss auch deren eventuell hoeherer Mindestwert erreicht
+  // werden. Ohne brauchbare Center-Referenz bleibt der feste Mindestwert oben
+  // trotzdem immer verbindlich.
+  if (!candidatePassesDynamicCenterReference()) {
+    return false;
+  }
+
+  autoStartCandidateHold(
+    resumeState,
+    centerRfReferenceUsable ? "RF_DROP_MIN_CENTER_REF" : "RF_DROP_MIN_PERCENT"
+  );
+  return true;
 }
 
 static bool autoServiceRfCandidateDuringCenter() {
@@ -1699,7 +1941,7 @@ static bool autoServiceRfCandidateDuringCenter() {
   const bool centerSignalStableCandidate = (!blockedPosition && centerSignalPercentOk && centerSignalDropOk);
   const unsigned long now = millis();
 
-  if (millis() - autoLastRfDiagMs >= AUTO_RF_DIAG_INTERVAL_MS) {
+  if (!autoLogActive && millis() - autoLastRfDiagMs >= AUTO_RF_DIAG_INTERVAL_MS) {
     autoLastRfDiagMs = millis();
     Serial.print("AUTO RF MITTE | ADC=");
     Serial.print(autoRfCurrentAdc, 1);
@@ -1786,6 +2028,7 @@ static bool autoServiceRfCandidateDuringCenter() {
   centerZoneWidthMs = 0;
   centerReturnMs = 0;
   centerSearchReverseCount = 0;
+  centerRfReferenceFinalize("AUTO Center-Kandidat");
   centerOwner = CENTER_OWNER_MENU;
 
   // Die Bestaetigung ist verbraucht; fuer den naechsten AUTO-Start wieder
@@ -2035,6 +2278,96 @@ static const char* autoStateText() {
     case AUTO_STATE_COMPLETE:                return "SAT BESTAETIGT";
     case AUTO_STATE_FAILED:                  return "FAILED";
     default:                                 return "UNKNOWN";
+  }
+}
+
+// Kompakte Protokollierung eines vollstaendigen AUTO-Suchlaufs.
+// Ausgabe bewusst als Semikolon-Liste, damit der Block leicht kopiert und
+// spaeter ausgewertet werden kann. Es werden nur bereits vorhandene Messwerte
+// gelesen; die RF-Filterung und AUTO-Entscheidungen werden nicht beeinflusst.
+static void serviceAutoSearchLog() {
+  if (!autoLogActive) return;
+
+  const unsigned long now = millis();
+  const bool stateChanged = (autoState != autoLogLastState);
+  const bool moving = (autoDriveDir != AZ_DIR_NONE) ||
+                      (autoState == AUTO_STATE_NEW_CENTER_WAIT);
+  const unsigned long intervalMs = moving ? 200UL : 500UL;
+
+  if (!stateChanged && autoLogLastPrintMs != 0 &&
+      (now - autoLogLastPrintMs) < intervalMs) {
+    return;
+  }
+
+  autoLogLastPrintMs = now;
+  autoLogLastState = autoState;
+
+  AzimuthDirection logDir = autoDriveDir;
+  if (logDir == AZ_DIR_NONE && autoState == AUTO_STATE_NEW_CENTER_WAIT) {
+    logDir = centerActiveDriveDirection();
+  }
+
+  Serial.print("AUTO_LOG;");
+  Serial.print(now - autoLogStartedAtMs);
+  Serial.print(";");
+  Serial.print(autoStateText());
+  Serial.print(";");
+  Serial.print(dirText(logDir));
+  Serial.print(";");
+  Serial.print(rfGetRawAdc());
+  Serial.print(";");
+  Serial.print(rfGetFilteredAdc(), 1);
+  Serial.print(";");
+  Serial.print(rfGetSignalPercent(), 1);
+  Serial.print(";");
+  Serial.print(autoRfDropAdc, 1);
+  Serial.print(";");
+  Serial.print(autoRfZeroAdc, 1);
+  Serial.print(";");
+  Serial.print(autoRfBestAdc, 1);
+  Serial.print(";");
+  Serial.print(azPositionSteps);
+  Serial.print(";");
+  Serial.print(currentRelativeAngle(), 2);
+  Serial.print(";");
+  Serial.print(azimuthIsCenterDetected() ? 1 : 0);
+  Serial.print(";");
+  Serial.print(azimuthIsEastLimitDetected() ? 1 : 0);
+  Serial.print(";");
+  Serial.print(azimuthIsWestLimitDetected() ? 1 : 0);
+  Serial.print(";");
+  Serial.print(AUTO_RF_MIN_CANDIDATE_PERCENT, 1);
+  Serial.print(";");
+  Serial.print(centerRfDynamicCandidateMinPercent, 1);
+  Serial.print(";");
+  Serial.println(blockedRangeCount());
+
+  const bool finished = (autoState == AUTO_STATE_COMPLETE) ||
+                        (autoState == AUTO_STATE_FAILED) ||
+                        (autoState == AUTO_STATE_EZ_ADJUST_HINT);
+  if (finished && !autoLogEndPrinted) {
+    autoLogEndPrinted = true;
+    Serial.println("# ----------------------------------------------------------------------------");
+    Serial.print("# AUTO_LOG_RESULT;STATE=");
+    Serial.print(autoStateText());
+    Serial.print(";BEST_ADC=");
+    Serial.print(autoRfBestAdc, 1);
+    Serial.print(";BEST_SIGNAL_APPROX=");
+    // BEST_ADC ist der beste gefilterte ADC-Wert des Trackers. Die aktuelle
+    // Prozentfunktion arbeitet nicht direkt mit einem beliebigen ADC-Argument;
+    // deshalb bleibt BEST_ADC der unverfaelschte Referenzwert fuer die Analyse.
+    Serial.print("n/a");
+    Serial.print(";CANDIDATE_ADC=");
+    Serial.print(autoCandidateAdc, 1);
+    Serial.print(";CANDIDATE_AZ=");
+    Serial.print(autoCandidateAzSteps);
+    Serial.print(";BLOCKED=");
+    Serial.println(blockedRangeCount());
+    Serial.println("# AUTO_LOG_END");
+    Serial.println("# Diesen kompletten Block von AUTO_LOG_BEGIN bis AUTO_LOG_END kopieren.");
+    Serial.println("# ============================================================================");
+    Serial.println();
+    autoLogActive = false;
   }
 }
 
@@ -2999,6 +3332,7 @@ static void centerTimingFail(const char* msg) {
   centerReturnMs = 0;
   centerLastFailText = msg ? msg : "unbekannt";
   centerSuccessNoticeActive = false;
+  centerRfReferenceInvalidate("Mittenfahrt Fehler");
 
   Serial.print("MITTE FEHLER: ");
   Serial.println(centerLastFailText);
@@ -3025,6 +3359,10 @@ static void centerTimingDone() {
   centerZoneWidthMs = 0;
   centerReturnMs = 0;
   centerSearchReverseCount = 0;
+
+  // V3_0_4: Nach erfolgreicher Mittenfahrt wird aus den besten RF-Werten
+  // eine optionale dynamische Referenz fuer die anschliessende Suchfahrt gebildet.
+  centerRfReferenceFinalize(centerOwner == CENTER_OWNER_AUTO ? "AUTO Mitte fertig" : "Menue Mitte fertig");
 
   if (centerOwner == CENTER_OWNER_AUTO) {
     centerSuccessNoticeActive = false;
@@ -3171,6 +3509,7 @@ static void startCenterHomingFromAlignMode() {
   centerReturnMs = 0;
   centerSearchReverseCount = 0;
   centerLastFailText = "";
+  centerRfReferenceReset("Menue-Grundeinstellung");
 
   Serial.println("AUSRICHTEN: Center-Zeitmessung gestartet.");
   Serial.println("MITTE: Erste Suchrichtung = EAST / OSTEN");
@@ -3214,6 +3553,7 @@ static void startCenterHomingFromAuto() {
   centerReturnMs = 0;
   centerSearchReverseCount = 0;
   centerLastFailText = "";
+  centerRfReferenceReset("AUTO-Mittenfahrt");
 
   // V3_01: Fuer die neue RF-Auswertung waehrend der Mittenfahrt wird die
   // ungefaehre AZPOS ab Beginn der Centerfahrt separat mitgefuehrt.
@@ -3256,6 +3596,7 @@ static void abortCenterModeToMenu() {
   centerZoneWidthMs = 0;
   centerReturnMs = 0;
   centerSearchReverseCount = 0;
+  centerRfReferenceInvalidate("Mittenfahrt abgebrochen");
   centerOwner = CENTER_OWNER_MENU;
   enterMainMenuMode();
   Serial.println("MITTE: Abbruch, zurueck ins Hauptmenue.");
@@ -3853,6 +4194,11 @@ static void updateCenterMode() {
 
   const unsigned long now = millis();
 
+  // V3_0_4: Jede echte Mittenfahrt sammelt jetzt optional die besten RF-Werte.
+  // Das veraendert die mechanische Centerfahrt nicht. Die Werte dienen nach
+  // erfolgreichem Abschluss nur als dynamische Referenz fuer die Suchfahrt.
+  centerRfReferenceService();
+
   // V3_01: Waehrend der AUTO-Mittenfahrt wird das RF-Signal jetzt bereits
   // ausgewertet. Wenn ein verwertbarer Satellit gefunden wird, stoppt die
   // Mittenfahrt sofort und der normale Kandidatenmodus erscheint.
@@ -4061,6 +4407,7 @@ void runLiveRuntime() {
   serviceCenterElevationAdjustSafety();
   updateCenterMode();
   updateAutoStrategy();
+  serviceAutoSearchLog();
 
   // Manueller EZ-Override:
   // Die Softlimit-Stoppruefung darf im manuellen EZ-Modus nicht mehr eingreifen.
@@ -4084,6 +4431,13 @@ void runLiveRuntime() {
     }
   }
 
+  // Im AUTO-Modus wurde oben bereits serviceAutoSearchLog() ausgefuehrt.
+  // Die grosse 500-ms-Statuszeile wuerde nur dieselben Daten wiederholen und
+  // den kopierbaren AUTO-Block unnoetig aufblaehen.
+  if (isAutoMode()) {
+    return;
+  }
+
   if (millis() - lastPrint < 500) {
     return;
   }
@@ -4099,7 +4453,7 @@ void runLiveRuntime() {
   Serial.print(" | AUTO_STATE=");
   Serial.print(liveGetAutoStateText());
 
-  Serial.print(" | FILTER=");
+  Serial.print(" | ANGLE_FILTER=");
   Serial.print(mpuGetFilteredAngleDeg(), 2);
 
   Serial.print(" | REL=");

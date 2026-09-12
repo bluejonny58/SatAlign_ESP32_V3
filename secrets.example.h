@@ -19,19 +19,20 @@ struct WifiCredential {
   const char* password;
 };
 
-// V3: Zwei bekannte Netzwerke.
-// Die Anlage scannt die sichtbaren WLANs und verbindet sich mit dem bekannten
-// Netzwerk mit der besseren Signalstaerke. Bei gleicher Signalstaerke bleibt
-// diese Reihenfolge die Prioritaet.
+// Bekannte Netzwerke in fester Prioritaetsreihenfolge.
+// Der erste sichtbare Eintrag wird verwendet. Dadurch kann z. B. das
+// GeniusBulli-Netz vor einem gleichzeitig sichtbaren Test-WLAN bevorzugt werden.
 static const WifiCredential WIFI_NETWORKS[] = {
-  { "WLAN_NAME_1", "WLAN_PASSWORT_1" },
-  { "WLAN_NAME_2", "WLAN_PASSWORT_2" }
+  { "GeniusBulli", "BULLI_PASSWORT_EINTRAGEN" },
+  { "GeniusHome",  "HOME_PASSWORT_EINTRAGEN" },
+  { "Genius Home", "HOME_PASSWORT_EINTRAGEN" },
+  { "WLAN_NAME_4", "WLAN_PASSWORT_4" }
 };
 
 static const int WIFI_NETWORK_COUNT =
   sizeof(WIFI_NETWORKS) / sizeof(WIFI_NETWORKS[0]);
 
-// Hostname im lokalen Netzwerk, z. B. http://sat-tracker.local
+// OTA-Hostname fuer ArduinoOTA. mDNS/Web-Aufruf per .local wird im Projekt nicht verwendet.
 static const char* WIFI_HOSTNAME = "sat-tracker";
 
 // OTA-Passwort fuer Updates ueber die Arduino IDE / Netzwerk-Port.

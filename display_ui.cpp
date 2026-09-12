@@ -77,7 +77,6 @@ static Adafruit_ST7735 tft(PIN_TFT_CS, PIN_TFT_DC, PIN_TFT_MOSI, PIN_TFT_SCK, -1
 
 // Gesamtabmessungen des TFT
 static const int SCREEN_W = 128;
-static const int SCREEN_H = 128;
 
 // Layout-Zonen
 static const int Y_MODE_TOP     = 0;
@@ -310,6 +309,51 @@ void displayShowSplash() {
   lastWasSpecialScreen = true;
 }
 
+// Einheitlicher Startbildschirm fuer alle laenger dauernden Schritte in
+// setup(). Während dieser Anzeige werden bewusst keinerlei Tasten oder
+// Bedienflaechen dargestellt. Dadurch ist eindeutig, dass Eingaben noch nicht
+// verarbeitet werden.
+void displayShowStartupStatus(const char* step, const char* detail) {
+  tft.fillScreen(C_BG);
+
+  tft.fillRect(0, 0, SCREEN_W, 24, C_MENU_BLUE);
+  writeText(5, 5, C_TEXT, C_MENU_BLUE, 2, "START");
+
+  writeText(7, 34, C_SEARCH, C_BG, 1, "SYSTEM STARTET");
+
+  if (step != nullptr && step[0] != '\0') {
+    writeText(7, 58, C_TEXT, C_BG, 1, String(step));
+  }
+
+  if (detail != nullptr && detail[0] != '\0') {
+    writeText(7, 76, C_IDLE, C_BG, 1, String(detail));
+  }
+
+  writeText(7, 108, C_MENU_DIM, C_BG, 1, "Bitte warten ...");
+
+  firstRender = true;
+  lastWasSpecialScreen = true;
+}
+
+// Abschlussanzeige direkt vor dem echten Hauptmenue. Erst ab diesem Punkt ist
+// setup() beendet und loop() wird unmittelbar danach Tasten, Runtime, OTA und
+// Webserver zyklisch bedienen.
+void displayShowSystemReady() {
+  tft.fillScreen(C_BG);
+
+  tft.fillRect(0, 0, SCREEN_W, 24, C_MENU_BLUE);
+  writeText(5, 5, C_TEXT, C_MENU_BLUE, 2, "BEREIT");
+
+  writeText(9, 44, C_SIGNAL_OK, C_BG, 2, "SYSTEM");
+  writeText(9, 70, C_SIGNAL_OK, C_BG, 2, "BEREIT");
+  writeText(9, 108, C_IDLE, C_BG, 1, "Bedienung aktiv");
+
+  delay(700);
+
+  firstRender = true;
+  lastWasSpecialScreen = true;
+}
+
 
 
 // Zeigt das Ergebnis des GY-521-/MPU6050-Boottests.
@@ -392,14 +436,20 @@ void displayShowMpuFatalBootError() {
 
 void displayShowSouthAlignPrompt() {
   tft.fillScreen(C_BG);
-  writeText(8, 8, C_SEARCH, C_BG, 2, "AUSRICHTEN");
-  writeText(8, 36, C_TEXT, C_BG, 1, "Nach Sueden");
-  writeText(8, 52, C_TEXT, C_BG, 1, "ausrichten");
-  writeText(8, 76, C_IDLE, C_BG, 1, "+/- = EL korr.");
-  writeText(8, 92, C_IDLE, C_BG, 1, "danach Hauptmenue");
+
+  // Auch der bekannte Sued-Hinweis bleibt Teil des Startablaufs. Solange
+  // setup() noch laeuft, erscheinen hier jedoch absichtlich keine Plus-,
+  // Minus- oder MODE-Hinweise.
+  tft.fillRect(0, 0, SCREEN_W, 24, C_MENU_BLUE);
+  writeText(5, 5, C_TEXT, C_MENU_BLUE, 2, "START");
+  writeText(8, 34, C_SEARCH, C_BG, 1, "SYSTEM STARTET");
+  writeText(8, 58, C_TEXT, C_BG, 1, "Nach Sueden");
+  writeText(8, 74, C_TEXT, C_BG, 1, "ausrichten");
+  writeText(8, 108, C_MENU_DIM, C_BG, 1, "Bitte warten ...");
   delay(1800);
 
   firstRender = true;
+  lastWasSpecialScreen = true;
 }
 
 // =====================================================
