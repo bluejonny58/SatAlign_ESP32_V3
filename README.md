@@ -195,9 +195,9 @@ Unter den normalen AZ-/EL-Fahrbuttons stehen zusaetzliche **Fein - / Fein +**-Bu
 - Elevations-Feinschritt: `WEB_EL_FINE_PULSE_MS = 50 ms`
 - Elevations-Fein-PWM: `WEB_EL_FINE_PWM = 90`
 
-Bei jeder Achse steht der **aktuelle RF-/OPT-Wert direkt zwischen den beiden Feinbuttons**. Beim Oeffnen der Seite **Manuell** wird automatisch eine neue Referenz fuer die Feinjustierung gesetzt. Bei AZ ist die Referenz `0 Schritte`; darunter wird die relative Position als `0 -> +/-n Schritte` angezeigt. Bei EL wird der aktuelle MPU-Winkel als Referenz gespeichert und danach `Referenz -> aktueller Winkel (Aenderung)` angezeigt. Separate Reset-Buttons und die Puls-/PWM-Werte werden in der Bedienansicht nicht mehr gezeigt.
+Bei jeder Achse stehen die **aktuelle Signalstärke und der Feinwert direkt zwischen den beiden Feinbuttons**. Beim Oeffnen der Seite **Manuell** wird automatisch eine neue Referenz fuer die Feinjustierung gesetzt. Bei AZ ist die Referenz `0 Schritte`; darunter wird die relative Position als `0 -> +/-n Schritte` angezeigt. Bei EL wird der aktuelle MPU-Winkel als Referenz gespeichert und danach `Referenz -> aktueller Winkel (Aenderung)` angezeigt. Separate Reset-Buttons und die Puls-/PWM-Werte werden in der Bedienansicht nicht mehr gezeigt.
 
-OPT spreizt den relevanten RF-Bereich von 80 bis 100 % linear auf 0 bis 100 % und dient ausschliesslich als Anzeige-Lupe. Eine separate Signalbewertungs-/Diagnosekarte wurde von der manuellen Bedienseite entfernt; die Qualitaetsgrenzen und technischen RF-Rohwerte bleiben in Dokumentation bzw. Diagnosekontext erhalten.
+Der **Feinwert** spreizt den relevanten Signalbereich von 80 bis 100 % linear auf 0 bis 100 % und dient ausschliesslich als Anzeige-Lupe. Eine separate Signalbewertungs-/Diagnosekarte wurde von der manuellen Bedienseite entfernt; die Qualitaetsgrenzen und technischen RF-Rohwerte bleiben in Dokumentation bzw. Diagnosekontext erhalten.
 
 Auch der technische Status wurde reduziert: doppelte Angaben fuer **Web-Zustand** und **Live-Zustand** entfallen. Die Diagnosekarte zeigt nur noch den aktuellen Motorzustand von AZ/EL, die Hall-Sensoren sowie den aktuellen EL-Winkel zusammen mit den Softlimits. Die Feinpulszeiten sind zentral in `settings.cpp` parametrierbar; V3.1.5 startet wegen der mechanischen Untersetzung bewusst mit sehr kleinen 50-ms-Schritten auf beiden Achsen.
 
@@ -214,7 +214,7 @@ Auch der technische Status wurde reduziert: doppelte Angaben fuer **Web-Zustand*
 
 ### V3.1.5
 - Manuelle Web-UI fuer die Feinjustierung neu angeordnet.
-- RF und gespreizter OPT-Wert stehen direkt zwischen `Fein -` und `Fein +`.
+- **Signalstärke** und **Feinwert** stehen direkt zwischen `Fein -` und `Fein +`.
 - Relative Positionsanzeige steht unmittelbar unter den Feinbuttons: AZ zeigt `0 -> +/-n Schritte`, EL zeigt `Referenzwinkel -> aktueller Winkel (Aenderung)`.
 - Die Referenz wird beim Oeffnen der manuellen Seite automatisch neu gesetzt; Reset-Button sowie Puls-/PWM-Angaben entfallen aus der Bedienansicht.
 - Technischen Status weiter verdichtet: keine doppelten Web-/Live-Zeilen mehr; nur Motorzustand AZ/EL, Hall-Sensoren sowie EL-Winkel mit Softlimits bleiben sichtbar.

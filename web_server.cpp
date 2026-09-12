@@ -674,7 +674,7 @@ static String buildManualPage() {
   const float manualOptPercent = fineOptPercent(manualRfPercent);
   html += "<div class='ctrl3' style='margin-top:8px'>";
   html += fineStepButton("btnAzFineMinus", "/az/fine/minus", "/api/az/fine/minus", "Fein -");
-  html += "<div id='azFineSignal' class='fineSignalBox'><div class='rfMain'>RF " + String(manualRfPercent, 1) + " %</div><div class='optMain'>OPT " + String(manualOptPercent, 1) + " %</div></div>";
+  html += "<div id='azFineSignal' class='fineSignalBox'><div class='rfMain'>Signalstärke " + String(manualRfPercent, 1) + " %</div><div class='optMain'>Feinwert " + String(manualOptPercent, 1) + " %</div></div>";
   html += fineStepButton("btnAzFinePlus", "/az/fine/plus", "/api/az/fine/plus", "Fein +");
   html += "</div>";
   html += "<div class='finePosition'><span>AZ Position</span><b id='azFinePos'>0 -> " + String(liveGetFineAzCorrectionSteps()) + " Schritte</b></div>";
@@ -697,7 +697,7 @@ static String buildManualPage() {
   html += "</div>";
   html += "<div class='ctrl3' style='margin-top:8px'>";
   html += fineStepButton("btnElFineMinus", "/el/fine/minus", "/api/el/fine/minus", "Fein -");
-  html += "<div id='elFineSignal' class='fineSignalBox'><div class='rfMain'>RF " + String(manualRfPercent, 1) + " %</div><div class='optMain'>OPT " + String(manualOptPercent, 1) + " %</div></div>";
+  html += "<div id='elFineSignal' class='fineSignalBox'><div class='rfMain'>Signalstärke " + String(manualRfPercent, 1) + " %</div><div class='optMain'>Feinwert " + String(manualOptPercent, 1) + " %</div></div>";
   html += fineStepButton("btnElFinePlus", "/el/fine/plus", "/api/el/fine/plus", "Fein +");
   html += "</div>";
   const float elFineCurrentDeg = liveGetRelativeAngleDeg();
@@ -718,7 +718,7 @@ static String buildManualPage() {
 
   html += "<script>";
   html += "function setCls(id,cls){var e=document.getElementById(id);if(e)e.className='btn '+cls;}";
-  html += "function setText(id,txt){var e=document.getElementById(id);if(e)e.textContent=txt;}function setFineSignal(id,rf,opt){var e=document.getElementById(id);if(!e)return;e.innerHTML='<div class=\'rfMain\'>RF '+Number(rf).toFixed(1)+' %</div><div class=\'optMain\'>OPT '+Number(opt).toFixed(1)+' %</div>';}";
+  html += "function setText(id,txt){var e=document.getElementById(id);if(e)e.textContent=txt;}function setFineSignal(id,rf,opt){var e=document.getElementById(id);if(!e)return;e.innerHTML='<div class=\'rfMain\'>Signalstärke '+Number(rf).toFixed(1)+' %</div><div class=\'optMain\'>Feinwert '+Number(opt).toFixed(1)+' %</div>';}";
   html += "function setNote(id,active,dir,axis){var e=document.getElementById(id);if(!e)return;var isH=axis=='Winkel';e.className='note '+(active?'warnbox':'');e.innerHTML=active?('<b>'+axis+' laeuft</b><br>Motor bleibt aktiv, bis STOP gedrueckt wird.'):(isH?'Winkel steht. Winkel + oder Winkel - startet die Bewegung.':axis+' steht. '+axis+'+ oder '+axis+'- startet die Bewegung.');}";
   html += "function applyManualState(d){setCls('btnAzMinus',(d.azActive&&d.azDir=='AZ-')?'activeMove':'orangeLight');setCls('btnAzPlus',(d.azActive&&d.azDir=='AZ+')?'activeMove':'orangeLight');setCls('btnAzStop',d.azActive?'activeStop':'redLight');setCls('btnElMinus',(d.elActive&&d.elDir=='EZ-')?'activeMove':'orangeLight');setCls('btnElPlus',(d.elActive&&d.elDir=='EZ+')?'activeMove':'orangeLight');setCls('btnElStop',d.elActive?'activeStop':'redLight');setText('azLive',d.azActive?d.azDir:'STOP');setText('elLive',d.elActive?d.elDir:'STOP');var w=Number(d.ez).toFixed(2)+' deg';setText('ezLive',w);setText('btnElMinus','Winkel -  '+Number(d.ez).toFixed(1)+' deg');setText('btnElPlus','Winkel +  '+Number(d.ez).toFixed(1)+' deg');if(d.rfPercent!==undefined){var opt=(d.optPercent!==undefined)?Number(d.optPercent).toFixed(1):'0.0';setFineSignal('azFineSignal',d.rfPercent,opt);setFineSignal('elFineSignal',d.rfPercent,opt);}if(d.azFineSteps!==undefined)setText('azFinePos','0 -> '+(d.azFineSteps>0?'+':'')+d.azFineSteps+' Schritte');if(d.elFineDelta!==undefined){var cur=Number(d.ez);var delta=Number(d.elFineDelta);var ref=cur-delta;setText('elFinePos',ref.toFixed(2)+' -> '+cur.toFixed(2)+' deg ('+(delta>=0?'+':'')+delta.toFixed(2)+' deg)');}if(d.hallText)setText('hallManual',d.hallText);var hm=document.getElementById('hallManualRow');if(hm&&d.hallClass)hm.className='row '+d.hallClass;setNote('azNote',d.azActive,d.azDir,'Azimut');setNote('elNote',d.elActive,d.elDir,'Winkel');}";
   html += "function optimistic(url){var d={azActive:false,azDir:'STOP',elActive:false,elDir:'STOP',ez:parseFloat((document.getElementById('ezLive')||{}).textContent)||0};if(url.indexOf('/api/az/plus')>=0){d.azActive=true;d.azDir='AZ+';}else if(url.indexOf('/api/az/minus')>=0){d.azActive=true;d.azDir='AZ-';}else if(url.indexOf('/api/el/plus')>=0){d.elActive=true;d.elDir='EZ+';}else if(url.indexOf('/api/el/minus')>=0){d.elActive=true;d.elDir='EZ-';}applyManualState(d);}";

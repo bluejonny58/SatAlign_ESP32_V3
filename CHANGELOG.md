@@ -3,11 +3,11 @@
 ## V3.1.5 - current
 
 - Manual fine-adjust Web UI reorganized for direct feedback while clicking.
-- Current RF percentage and stretched OPT value are shown directly between `Fein -` and `Fein +` for both AZ and EL.
+- The manual fine-alignment controls now label the live values as user-facing `Signalstärke` and `Feinwert` instead of `RF` and `OPT`.
 - A new fine-adjustment reference is set automatically when opening `Manuell`: AZ starts at `0` steps; EL stores the current MPU angle.
 - Position display now shows the reference explicitly: AZ as `0 -> +/-n steps`; EL as `reference angle -> current angle (delta)`.
 - Reset controls and pulse/PWM values were removed from the user-facing fine-adjustment rows; pulse settings remain centrally configurable in `settings.cpp`.
-- The separate lower signal/diagnostic card was removed from the manual page; RF and OPT remain directly at the fine-step controls.
+- The separate lower signal/diagnostic card was removed from the manual page; Signalstärke and Feinwert remain directly at the fine-step controls.
 - Technical status is compacted to three rows: AZ/EL motor state, Hall sensors, and EL angle with soft limits; duplicate Web/Live state rows were removed.
 - Search Web UI presents the actual RF percentage and quality label instead of voltage/ADC as the primary user-facing signal value; raw values remain available in diagnostic contexts.
 - User-facing RF quality classes are derived from the common percentage scale: `<80 % = weak`, `80-<85 % = usable`, `85-<95 % = good`, `>=95 % = very good`. This classification is display-only; the AUTO candidate threshold remains 80 %.
