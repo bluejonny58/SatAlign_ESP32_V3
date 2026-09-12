@@ -15,7 +15,7 @@ V3.1.4 ist der aktuell empfohlene Projektstand. Die Suchlogik basiert auf den pr
 - gemeinsame RF-Prozentbewertung fuer TFT, Web-UI, Diagnose und AUTO-Suche
 - `RF_FILTER_ALPHA = 0.50` nach reproduzierbarem RF-/Azimut-Test
 - normale AUTO-Kandidatenschwelle: **80 %**
-- RF-Anzeige auf maximal **95 %** begrenzt
+- RF-Anzeige auf maximal **100 %** begrenzt
 - dynamische RF-Referenz aus der Centerfahrt bleibt aktiv, darf die 80-%-Mindestgrenze aber nicht unterschreiten
 - kompakter, kopierbarer AUTO-Diagnoseblock im seriellen Monitor
 - feste IP **192.168.4.15** im Netzwerk `GeniusBulli`
@@ -59,7 +59,7 @@ RF_STRONG_REFERENCE_ADC = 700.0f;
 AUTO_RF_MIN_CANDIDATE_PERCENT = 80.0f;
 ```
 
-Die Prozentanzeige wird bewusst bei **95 %** gedeckelt. Die 80-%-Grenze ist die operative Mindestgrenze fuer normale AUTO-Kandidaten; ein Wert unterhalb davon soll nicht als normaler AUTO-Kandidat akzeptiert werden.
+Die gemeinsame RF-Prozentbewertung wird auf den normalen Bereich von **0 bis 100 %** begrenzt. Werte, die rechnerisch oberhalb der starken Referenz liegen, werden daher als **100 %** dargestellt. Die 80-%-Grenze bleibt die operative Mindestgrenze fuer normale AUTO-Kandidaten; ein Wert unterhalb davon soll nicht als normaler AUTO-Kandidat akzeptiert werden.
 
 ## Suchablauf
 

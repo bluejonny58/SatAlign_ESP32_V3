@@ -4,7 +4,7 @@
 
 - RF filter changed from 0.75 to 0.50 after a reproducible RF/azimuth comparison test.
 - Normal AUTO candidate minimum remains 80 %.
-- RF display remains capped at 95 %.
+- RF display cap adjusted from 95 % to 100 %; AUTO candidate minimum remains unchanged.
 - TFT, Web UI, serial diagnosis and AUTO search use the same RF percentage evaluation.
 - Compact AUTO serial logging added and cleaned up for field diagnostics.
 - Redundant periodic AUTO output suppressed while important events remain visible.

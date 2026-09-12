@@ -25,7 +25,7 @@ Die Release-Version wird nicht ueber den Dateinamen, sondern ueber `FIRMWARE_VER
 - ElegantOTA (`/update`) und ArduinoOTA parallel dokumentiert.
 - fruehere automatische Funktion `Signal optimieren` aus Bedienung/Dokumentation entfernt.
 - RF-Auswertung fuer Anzeige und AUTO-Suche vereinheitlicht.
-- RF-Anzeige auf max. 95 % begrenzt.
+- RF-Anzeige auf max. 100 % begrenzt.
 - AUTO-Kandidatenschwelle auf 80 % gesetzt.
 - `RF_FILTER_ALPHA` auf 0.50 eingestellt.
 - strukturiertes, bereinigtes AUTO-Serial-Logging dokumentiert.
